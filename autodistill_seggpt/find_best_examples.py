@@ -52,16 +52,16 @@ def find_best_examples(
         max_test_imgs:int=10,
         which_metric:Union[str,Metric]="iou",
 ):
-    # find the best set of example images for each class.
-    cls_names = [f"{i}-{cls_name}" for i,cls_name in enumerate(ref_dataset.classes)]
-
     best_examples = {}
 
     if type(which_metric) == str:
         which_metric = metrics_registry[which_metric]
     metric,metric_name,metric_direction = which_metric
 
-    for i,cls in enumerate(cls_names):
+    for i,cls in enumerate(ref_dataset.classes):
+
+        cls_deduped = f"{i}-{cls}"
+
         # get best example set for this class
         examples_scores = []
 
@@ -73,7 +73,7 @@ def find_best_examples(
         gt_dataset = shrink_dataset_to_size(gt_dataset,max_test_imgs)
         
         if len(positive_examples)==0:
-            best_examples[cls] = []
+            best_examples[cls_deduped] = []
             continue
         
         num_combos = choose(len(positive_examples),num_examples)
@@ -82,7 +82,7 @@ def find_best_examples(
         combo_hashes = range(num_combos)
         sub_combo_hashes = sample(combo_hashes,num_iters)
 
-        print(f"Finding best examples for class {cls}.")
+        print(f"Finding best examples for class {cls_deduped}.")
 
         combo_pbar = tqdm(sub_combo_hashes)
         max_score = -math.inf
@@ -90,7 +90,7 @@ def find_best_examples(
         for combo_hash in combo_pbar:
             image_choices = combo_hash_to_choices(combo_hash,positive_examples,num_examples) 
             onto_tuples = [(
-                (cls,image_choices),
+                (cls_deduped,image_choices),
                 cls
             )]
 
@@ -105,7 +105,7 @@ def find_best_examples(
             combo_pbar.set_description(f"Best {metric_name}: {round(max_score,2)}")
         
         my_best_examples,best_score = max(examples_scores,key=lambda x:x[1])
-        best_examples[cls] = my_best_examples
+        best_examples[cls_deduped] = my_best_examples
     return best_examples
 
 

@@ -109,7 +109,6 @@ class SegGPT(DetectionBaseModel):
 
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = self.preprocess(img)
-        img = self.imagenet_preprocess(img)
 
         # draw masks onto image
         mask = np.zeros_like(og_img)
