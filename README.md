@@ -34,43 +34,50 @@ pip3 install autodistill-seggpt
 
 This Autodistill module uses a handful of pre-labelled images for improved accuracy.
 
-Note: this adds some complexity--`autodistill_seggpt` is BYOD--bring your own dataset.
+You will need some labeled images to use SegGPT. Don't have any labeled images? Check out [Roboflow Annotate](https://roboflow.com/annotate), a feature-rich annotation tool from which you can export data for use with Autodistill.
 
 ## Quickstart
 
 ```python
 from autodistill_seggpt import SegGPT,FewShotOntology
-import supervision as sv
-
-#
-# download dataset with a few labelled images (5-10 is recommended, but you can go as high as you like)
-#
-from roboflow import login,Roboflow
-
-login()
-rf = Roboflow()
-
-project = rf.workspace("roboflow-4rfmv").project("climbing-y56wy")
-dataset = project.version(5).download("coco-segmentation")
-
-climbing_dataset = sv.DetectionDataset.from_coco(
-    images_directory_path=f"{dataset.location}/train",
-    annotations_path=f"{dataset.location}/train/_annotations.coco.json",
-    force_masks=True
-)
-
-#
-# Create ontology
-#
-
-climbing_ontology = FewShotOntology(climbing_dataset)
 
 base_model = SegGPT(
-    ontology=climbing_ontology,
-    refine_detections=True
+    ontology=FewShotOntology(supervision_dataset)
 )
 
 base_model.label("./unlabelled-climbing-photos", extension=".jpg")
+```
+
+## How to load data from Roboflow
+
+Labelling and importing images is easy!
+
+You can use [Roboflow Annotate](https://roboflow.com/annotate) to label a few images (5-10 should work fine). For your Project Type, make sure to pick Instance Segmentation--you'll be labelling with polygons.
+
+Once you've labelled your images, you can press Generate > Generate New Version. You can use all the default options--no Augmentations are necessary.
+
+Once your dataset version is generated, you can press Export > Continue.
+
+Then you'll get some download code to copy--it should look something like this:
+
+```python
+!pip install roboflow
+
+from roboflow import Roboflow
+rf = Roboflow(api_key="ABCDEFG")
+project = rf.workspace("lorem-ipsum").project("dolor-sit-amet")
+dataset = project.version(1).download("yolov8")
+```
+
+To import your dataset into Autodistill, run the following:
+
+```py
+import supervision as sv
+supervision_dataset = sv.DetectionDataset.from_yolo(
+    images_directory_path=f"{dataset.location}/train/images",
+    annotations_directory_path=f"{dataset.location}/train/labels",
+    data_yaml_path=f"{dataset.location}/data.yaml"
+)
 ```
 
 ## License
