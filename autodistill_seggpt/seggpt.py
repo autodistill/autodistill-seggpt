@@ -26,8 +26,6 @@ def check_dependencies():
         print("Installing SegGPT...")
         subprocess.run(["git", "clone", "https://github.com/baaivision/Painter.git"])
 
-        sys.path.append(seggpt_path)
-
         curr_dir = os.getcwd()
         
         os.chdir(seggpt_path)
@@ -42,6 +40,8 @@ def check_dependencies():
         subprocess.run(["wget", model_url, "-O", ckpt_path])
 
         os.chdir(curr_dir)
+    sys.path.append(seggpt_path)
+
 
 check_dependencies()
 
