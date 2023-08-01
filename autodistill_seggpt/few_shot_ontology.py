@@ -9,6 +9,11 @@ from autodistill.detection import CaptionOntology, DetectionBaseModel, Detection
 from supervision import Detections
 from supervision.dataset.core import DetectionDataset
 
+from .find_best_examples import find_best_examples
+
+def default_model():
+    from seggpt import SegGPT
+    return SegGPT()
 
 @dataclass
 class FewShotOntology(DetectionOntology):
@@ -18,9 +23,33 @@ class FewShotOntology(DetectionOntology):
         # each tuple in the list has form:
         # ( (training_class_name, [reference_image_ids]), output_class_name )]))
         # i.e. ( ("1-climbing-holds",["demo-holds-1.jpg","demo-holds-2.jpg"]), "climbing-hold" )
-        ontology: List[Tuple[Tuple[str, List[str]], str]],
+        ontology: List[Tuple[Tuple[str, List[str]], str]]=None,
     ):
         self.ref_dataset = ref_dataset
+
+        if ontology is None:
+            # make sensible defaults.
+            # basically: turn the class list ["climbing-hold","climbing-hold","floor","climber"]
+            # into the ontology: { "1-climbing-hold": "climbing-hold", "2-floor": "floor", "3-climber": "climber"}
+
+            # This handles a common case where class idx 0 is empty and shares a name with other class idxes.
+
+            class_name_to_id = {}
+
+            for detections in ref_dataset.annotations.vals():
+                # get unique classes in this image
+                classes = np.unique(detections.class_id)
+                for i in classes.tolist():
+                    class_name = ref_dataset.classes[i]
+                    class_name_to_id[class_name] = i
+            
+            ontology = {
+                f"{i}-{cls_name}":cls_name for cls_name, i in class_name_to_id.items()
+            }
+
+            best_examples = find_best_examples(ref_dataset, default_model)
+            ontology = FewShotOntology.examples_to_tuples(ontology, best_examples)
+
         self.ontology = ontology
         rich_ontology = self.enrich_ontology(ontology)
         self.rich_ontology = rich_ontology
@@ -78,6 +107,19 @@ class FewShotOntology(DetectionOntology):
                 new_key.append((image, detections))
             rich_ontology.append((new_key, val))
         return rich_ontology
+    
+    @staticmethod
+    def examples_to_tuples(
+        ontology: CaptionOntology,
+        examples: Dict[str, List[str]],
+    ) -> List[Tuple[Tuple[str, List[str]], str]]:
+        onto_tuples = []
+        for prompt, examples in examples.items():
+            if prompt not in ontology.prompts():
+                continue
+            cls = ontology.promptToClass(prompt)
+            onto_tuples.append(((prompt, examples), cls))
+        return onto_tuples
 
     @staticmethod
     def from_examples(
@@ -85,10 +127,5 @@ class FewShotOntology(DetectionOntology):
         ontology: CaptionOntology,
         examples: Dict[str, List[str]],
     ) -> FewShotOntology:
-        onto_tuples = []
-        for prompt, examples in examples.items():
-            if prompt not in ontology.prompts():
-                continue
-            cls = ontology.promptToClass(prompt)
-            onto_tuples.append(((prompt, examples), cls))
+        onto_tuples = FewShotOntology.examples_to_tuples(ontology, examples)
         return FewShotOntology(ref_dataset, onto_tuples)

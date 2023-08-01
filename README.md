@@ -39,32 +39,41 @@ Note: this adds some complexity--`autodistill_seggpt` is BYOD--bring your own da
 ## Quickstart
 
 ```python
+from autodistill_seggpt import SegGPT,FewShotOntology
 
-```
 
-```python
-from autodistill_detic import DETIC
+#
+# Download a Roboflow dataset with a few labelled images (5-10 is recommended, but you can go as high as you like)
+#
+from roboflow import login,Roboflow
 
-# define an ontology to map class names to our DETIC prompt
-# the ontology dictionary has the format {caption: class}
-# where caption is the prompt sent to the base model, and class is the label that will
-# be saved for that caption in the generated annotations
-# then, load the model
-base_model = DETIC(
-    ontology=CaptionOntology(
-        {
-            "person": "person",
-        }
-    )
+login()
+rf = Roboflow()
+
+project = rf.workspace("roboflow-4rfmv").project("climbing-y56wy")
+dataset = project.version(5).download("coco-segmentation")
+
+climbing_dataset = sv.DetectionDataset.from_coco(
+    images_directory_path=f"{dataset.location}/train",
+    annotations_path=f"{dataset.location}/train/_annotations.coco.json",
+    force_masks=True
 )
-base_model.label("./context_images", extension=".jpg")
+
+climbing_ontology = FewShotOntology(climbing_dataset)
+
+base_model = SegGPT(
+    ontology=climbing_ontology,
+    refine_detections=True
+)
+
+base_model.label("./unlabelled-climbing-photos", extension=".jpg")
 ```
 
 ## License
 
 The code in this repository is licensed under an [MIT license](LICENSE).
 
-See the Meta Research DETIC repository for more information on the [DETIC license](https://github.com/facebookresearch/Detic).
+See the SegGPT repository for more information on the [SegGPT license](https://github.com/baaivision/Painter/tree/main).
 
 ## 🏆 Contributing
 

@@ -1,6 +1,4 @@
-from autodistill_seggpt import SegGPT,find_best_examples,FewShotOntology
-from autodistill.detection import CaptionOntology
-import supervision as sv
+from autodistill_seggpt import SegGPT,FewShotOntology
 
 
 #
@@ -23,26 +21,11 @@ climbing_dataset = sv.DetectionDataset.from_coco(
 #
 # Create ontology
 #
-climbing_ontology = CaptionOntology({
-    "2-floor":"floor",
-    "1-climbing-holds":"hold",
-    "3-person":"climber",
-})
 
-# "Train" your ontology to use the best possible visual prompts
-best_examples = find_best_examples(
-    climbing_dataset,
-    SegGPT
-)
-
-few_shot_ontology = FewShotOntology.from_examples(
-    ref_dataset=climbing_dataset,
-    ontology=climbing_ontology,
-    examples=best_examples
-)
+climbing_ontology = FewShotOntology(climbing_dataset)
 
 base_model = SegGPT(
-    ontology=few_shot_ontology,
+    ontology=climbing_ontology,
     refine_detections=True
 )
 
