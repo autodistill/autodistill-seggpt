@@ -22,25 +22,19 @@ def check_dependencies():
     
     # Check if SegGPT is installed
     seggpt_path = os.path.join(autodistill_dir, "Painter","SegGPT","SegGPT_inference")
+    models_dir = os.path.join(seggpt_path, "models")
+    global ckpt_path
+    ckpt_path = os.path.join(models_dir, ckpt_name)
+    sys.path.append(seggpt_path)
+
     if not os.path.isdir(seggpt_path):
         print("Installing SegGPT...")
         subprocess.run(["git", "clone", "https://github.com/baaivision/Painter.git"])
 
-        curr_dir = os.getcwd()
-        
-        os.chdir(seggpt_path)
-
-        models_dir = os.path.join(seggpt_path, "models")
         os.makedirs(models_dir, exist_ok=True)
-
-        global ckpt_path
-        ckpt_path = os.path.join(models_dir, ckpt_name)
 
         print("Downloading SegGPT weights...")
         subprocess.run(["wget", model_url, "-O", ckpt_path])
-
-        os.chdir(curr_dir)
-    sys.path.append(seggpt_path)
 
 
 check_dependencies()
