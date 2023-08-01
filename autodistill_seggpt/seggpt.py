@@ -1,6 +1,7 @@
 model_url = "https://huggingface.co/BAAI/SegGPT/resolve/main/seggpt_vit_large.pth"
 ckpt_name = "seggpt_vit_large.pth"
 ckpt_path = None
+model = "seggpt_vit_large_patch16_input896x448"
 
 import os
 import subprocess
@@ -41,7 +42,6 @@ def check_dependencies():
 
 check_dependencies()
 
-
 from dataclasses import dataclass
 from math import inf
 from typing import Dict, List, Tuple, Union
@@ -67,7 +67,6 @@ imagenet_mean = np.array([0.485, 0.456, 0.406])
 imagenet_std = np.array([0.229, 0.224, 0.225])
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = "seggpt_vit_large_patch16_input896x448"
 
 res, hres = 448, 448
 
@@ -77,7 +76,7 @@ from .few_shot_ontology import FewShotOntology
 from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitmasks
 from .sam_refine import refine_detections,load_SAM
 
-use_colorings = True
+use_colorings = colors.preset != "white"
 
 @dataclass
 class SegGPT(DetectionBaseModel):
@@ -90,38 +89,23 @@ class SegGPT(DetectionBaseModel):
         refine_detections: bool = True,
         sam_predictor=None,
     ):
-        self.DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self.ontology = ontology
         self.refine_detections = refine_detections
 
-        if SegGPT.model is None:
-            SegGPT.model = prepare_model(ckpt_path, model, colors.seg_type).to(
-                self.DEVICE
-            )
-        self.model = SegGPT.model
-
-        if sam_predictor is not None:
-            self.sam_predictor = sam_predictor
-        else:
-            if SegGPT.sam_predictor is None:
-                SegGPT.sam_predictor = load_SAM()
-            self.sam_predictor = SegGPT.sam_predictor
+        self.load_models(sam_predictor)
 
         self.ref_imgs = {}
 
     def preprocess(self, img: np.ndarray) -> np.ndarray:
         img = cv2.resize(img, dsize=(res, hres))
         img = img / 255.0
-        return img
-
-    def imagenet_preprocess(self, img: np.ndarray) -> np.ndarray:
         img = img - imagenet_mean
         img = img / imagenet_std
         return img
 
     # convert an img + detections into an img + mask.
-    # note: all the detections map to the same base-model class in the Ontology--they can be treated as the same class.
+    # note: all the detections have the same class in the FewShotOntology.
     def prepare_ref_img(self, img: np.ndarray, detections: Detections):
         ih, iw, _ = img.shape
         og_img = img
@@ -153,7 +137,6 @@ class SegGPT(DetectionBaseModel):
             mask[det_mask] = curr_rgb
 
         mask = self.preprocess(mask)
-        mask = self.imagenet_preprocess(mask)
 
         return img, mask
 
@@ -196,7 +179,6 @@ class SegGPT(DetectionBaseModel):
         input_image = np.array(image)
 
         img = self.preprocess(input_image)
-        img = self.imagenet_preprocess(img)  # shape (H,W,C)
 
         detections = []
         for keyId, raw_ref_imgs in enumerate(self.ontology.rich_prompts()):
@@ -213,17 +195,8 @@ class SegGPT(DetectionBaseModel):
             imgs = np.concatenate((ref_imgs, img_repeated), axis=1)
             masks = np.concatenate((ref_masks, ref_masks), axis=1)
 
-            # for i in range(len(imgs)):
-            #     cv2.imwrite(
-            #         f"debug/img_{i}.png", (imgs[i] * imagenet_std + imagenet_mean) * 255
-            #     )
-            #     cv2.imwrite(
-            #         f"debug/mask_{i}.png",
-            #         (masks[i] * imagenet_std + imagenet_mean) * 255,
-            #     )
-
             torch.manual_seed(2)
-            output = run_one_image(imgs, masks, self.model, self.DEVICE)
+            output = run_one_image(imgs, masks, self.model, device)
             output = (
                 F.interpolate(
                     output[None, ...].permute(0, 3, 1, 2),
@@ -239,13 +212,8 @@ class SegGPT(DetectionBaseModel):
             # But it also serves as a bitmask-ifier when we juse set the palette to be white.
             quant_output = quantize(output)
 
-            if use_colorings:
-                to_bitmask_output = quant_output
-                to_bitmask_palette = colors.palette
-            else:
-                to_bitmask_output = quant_output.sum(axis=-1) > 10
-                to_bitmask_output = to_bitmask_output[..., None] * 255
-                to_bitmask_palette = np.asarray([[255, 255, 255]])
+            to_bitmask_output = quant_output
+            to_bitmask_palette = colors.palette
 
             bitmasks = quantized_to_bitmasks(to_bitmask_output, to_bitmask_palette)
             new_detections = bitmasks_to_detections(bitmasks, keyId)
@@ -266,6 +234,22 @@ class SegGPT(DetectionBaseModel):
                 )
 
         return detections
+    
+    # Load SegGPT and SAM.
+    # We share these models globally across all SegGPT instances, since we end up making lots of SegGPT instances during find_best_examples.
+    def load_models(self,sam_predictor):
+        if SegGPT.model is None:
+            SegGPT.model = prepare_model(ckpt_path, model, colors.seg_type).to(device)
+        self.model = SegGPT.model
+
+        # We load the SAM predictor if it's a) needed and b) not already loaded.
+        if sam_predictor is not None or not self.refine_detections:
+            self.sam_predictor = sam_predictor
+        else:
+            if SegGPT.sam_predictor is None:
+                SegGPT.sam_predictor = load_SAM()
+            self.sam_predictor = SegGPT.sam_predictor
+
 
 
 from supervision.dataset.utils import approximate_mask_with_polygons

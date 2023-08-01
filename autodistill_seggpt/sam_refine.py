@@ -3,12 +3,10 @@ import numpy as np
 import supervision as sv
 from segment_anything import SamPredictor, sam_model_registry
 
+# resolution of SAM output masks
 sam_res = (256, 256)
 
 eps = 1e-6
-
-from .metrics import get_combined_mask
-
 
 def refine_detections(
     img: np.ndarray,
