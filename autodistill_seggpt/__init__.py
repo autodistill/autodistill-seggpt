@@ -1,4 +1,4 @@
-__version__ = "0.0.5"
+__version__ = "0.0.1"
 
 from .seggpt import SegGPT
 from .few_shot_ontology import FewShotOntology

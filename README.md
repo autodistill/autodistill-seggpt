@@ -15,7 +15,7 @@ This repository contains the code supporting the SegGPT base model for use with 
 
 [SegGPT](https://github.com/baaivision/Painter/tree/main/SegGPT) is a transformer-based few-shot semantic segmentation model developed by [BAAI Vision](https://github.com/baaivision).
 
-It thrives when given multiple labelled example images.
+This model performs well on task-specific segmentation tasks when given a few labeled images from which to learn features about the objects you want to identify.
 
 Read the full [Autodistill documentation](https://autodistill.github.io/autodistill/).
 
