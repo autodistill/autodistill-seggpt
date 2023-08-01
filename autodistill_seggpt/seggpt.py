@@ -15,7 +15,7 @@ from seggpt.seggpt_engine import run_one_image
 from seggpt.seggpt_inference import prepare_model
 
 # SAM files
-from segment_anything import SamPredictor
+from segment_anything import SamPredictor,load_SAM
 from supervision import Detections
 from supervision.dataset.core import DetectionDataset
 from torch.nn import functional as F
@@ -25,6 +25,7 @@ from torch.nn import functional as F
 imagenet_mean = np.array([0.485, 0.456, 0.406])
 imagenet_std = np.array([0.229, 0.224, 0.225])
 
+model_url = "https://huggingface.co/BAAI/SegGPT/resolve/main/seggpt_vit_large.pth"
 ckpt_path = "seggpt_vit_large.pth"
 device = torch.device("cuda")
 model = "seggpt_vit_large_patch16_input896x448"
@@ -35,21 +36,26 @@ res, hres = 448, 448
 from . import colors
 from .few_shot_ontology import FewShotOntology
 from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitmasks
-from .sam_refine import load_sam, refine_detections
+from .sam_refine import refine_detections
 
 use_colorings = True
 
+import os
+def check_dependencies():
+    # Create the ~/.cache/autodistill directory if it doesn't exist
+    autodistill_dir = os.path.expanduser("~/.cache/autodistill")
+    os.makedirs(autodistill_dir, exist_ok=True)
+    
+    os.chdir(autodistill_dir)
 
-def show_usage():
-    t = torch.cuda.get_device_properties(0).total_memory
-    r = torch.cuda.memory_reserved(0)
-    a = torch.cuda.memory_allocated(0)
+    weights_path = os.path.join(autodistill_dir, ckpt_path)
+    if not os.path.exists(weights_path):
+        print("Downloading SegGPT weights...")
+        os.system(["wget", model_url, "-O", weights_path])
 
-    print(
-        f"Total: {t//(10**9)}, Reserved: {r//(10**9)}, Allocated: {a//(10**9)}, Free: {(t-a)//(10**9)}"
-    )
+check_dependencies()
 
-
+@dataclass
 class SegGPT(DetectionBaseModel):
     sam_predictor: Union[None, SamPredictor] = None
     model: Union[None, torch.nn.Module] = None
@@ -75,7 +81,7 @@ class SegGPT(DetectionBaseModel):
             self.sam_predictor = sam_predictor
         else:
             if SegGPT.sam_predictor is None:
-                SegGPT.sam_predictor = load_sam()
+                SegGPT.sam_predictor = load_SAM()
             self.sam_predictor = SegGPT.sam_predictor
 
         self.ref_imgs = {}
@@ -183,16 +189,15 @@ class SegGPT(DetectionBaseModel):
             # SegGPT uses this weird format--it needs images/masks to be in format (N,2H,W,C)--where the first H rows are the reference image, and the next H rows are the input image.
             imgs = np.concatenate((ref_imgs, img_repeated), axis=1)
             masks = np.concatenate((ref_masks, ref_masks), axis=1)
-            # show_usage()
 
-            for i in range(len(imgs)):
-                cv2.imwrite(
-                    f"debug/img_{i}.png", (imgs[i] * imagenet_std + imagenet_mean) * 255
-                )
-                cv2.imwrite(
-                    f"debug/mask_{i}.png",
-                    (masks[i] * imagenet_std + imagenet_mean) * 255,
-                )
+            # for i in range(len(imgs)):
+            #     cv2.imwrite(
+            #         f"debug/img_{i}.png", (imgs[i] * imagenet_std + imagenet_mean) * 255
+            #     )
+            #     cv2.imwrite(
+            #         f"debug/mask_{i}.png",
+            #         (masks[i] * imagenet_std + imagenet_mean) * 255,
+            #     )
 
             torch.manual_seed(2)
             output = run_one_image(imgs, masks, self.model, self.DEVICE)
@@ -206,6 +211,9 @@ class SegGPT(DetectionBaseModel):
                 .numpy()
             )
 
+            # We try to constrain all masks to follow a given color palette.
+            # This could theoretically help distinguish adjacent instances.
+            # But it also serves as a bitmask-ifier when we juse set the palette to be white.
             quant_output = quantize(output)
 
             if use_colorings:

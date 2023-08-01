@@ -2,7 +2,7 @@ import setuptools
 from setuptools import find_packages
 import re
 
-with open("./src/__init__.py", 'r') as f:
+with open("./autodistill_seggpt/__init__.py", 'r') as f:
     content = f.read()
     # from https://www.py4u.net/discuss/139845
     version = re.search(r'__version__\s*=\s*[\'"]([^\'"]*)[\'"]', content).group(1)
@@ -28,6 +28,8 @@ setuptools.setup(
         "supervision",
         "pycocotools",
         "timm",
+    ],
+    dependency_links=[
         "git+https://github.com/facebookresearch/detectron2.git"
     ],
     packages=find_packages(exclude=("tests",)),
@@ -39,5 +41,5 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.7",
 )
