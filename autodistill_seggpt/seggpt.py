@@ -16,11 +16,14 @@ def check_dependencies():
     try:
         import detectron2
     except ImportError:
-        subprocess.run(["pip", "install", "git+https://github.com/facebookresearch/detectron2.git"])
+        print("Installing detectron2...")
+        subprocess.run([sys.executable,"-m","pip", "install", "git+https://github.com/facebookresearch/detectron2.git"])
+        
     
     # Check if SegGPT is installed
-    seggpt_path = os.path.join(autodistill_dir, "Painter","SegGPT","SegGPT_Inference")
+    seggpt_path = os.path.join(autodistill_dir, "Painter","SegGPT","SegGPT_inference")
     if not os.path.isdir(seggpt_path):
+        print("Installing SegGPT...")
         subprocess.run(["git", "clone", "https://github.com/baaivision/Painter.git"])
 
         sys.path.append(seggpt_path)
@@ -207,9 +210,9 @@ class SegGPT(DetectionBaseModel):
                 .numpy()
             )
 
-            # We try to constrain all masks to follow a given color palette.
-            # This could theoretically help distinguish adjacent instances.
-            # But it also serves as a bitmask-ifier when we juse set the palette to be white.
+            # We constrain all masks to follow a given color palette.
+            # This can help distinguish adjacent instances.
+            # But it also serves as a bitmask-ifier when we just set the palette to be white.
             quant_output = quantize(output)
 
             to_bitmask_output = quant_output
