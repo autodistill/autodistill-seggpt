@@ -6,22 +6,31 @@ model = "seggpt_vit_large_patch16_input896x448"
 import os
 import subprocess
 import sys
+
+
 def check_dependencies():
     # Create the ~/.cache/autodistill directory if it doesn't exist
     autodistill_dir = os.path.expanduser("~/.cache/autodistill")
     os.makedirs(autodistill_dir, exist_ok=True)
-    
+
     os.chdir(autodistill_dir)
 
     try:
         import detectron2
     except ImportError:
         print("Installing detectron2...")
-        subprocess.run([sys.executable,"-m","pip", "install", "git+https://github.com/facebookresearch/detectron2.git"])
-        
-    
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "git+https://github.com/facebookresearch/detectron2.git",
+            ]
+        )
+
     # Check if SegGPT is installed
-    seggpt_path = os.path.join(autodistill_dir, "Painter","SegGPT","SegGPT_inference")
+    seggpt_path = os.path.join(autodistill_dir, "Painter", "SegGPT", "SegGPT_inference")
     models_dir = os.path.join(seggpt_path, "models")
     global ckpt_path
     ckpt_path = os.path.join(models_dir, ckpt_name)
@@ -53,7 +62,6 @@ from PIL import Image
 # SegGPT repo files
 from seggpt_engine import run_one_image
 from seggpt_inference import prepare_model
-
 from segment_anything import SamPredictor
 from supervision import Detections
 from torch.nn import functional as F
@@ -71,9 +79,10 @@ res, hres = 448, 448
 from . import colors
 from .few_shot_ontology import FewShotOntology
 from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitmasks
-from .sam_refine import refine_detections,load_SAM
+from .sam_refine import load_SAM, refine_detections
 
 use_colorings = colors.preset != "white"
+
 
 @dataclass
 class SegGPT(DetectionBaseModel):
@@ -230,10 +239,10 @@ class SegGPT(DetectionBaseModel):
                 )
 
         return detections
-    
+
     # Load SegGPT and SAM.
     # We share these models globally across all SegGPT instances, since we end up making lots of SegGPT instances during find_best_examples.
-    def load_models(self,sam_predictor):
+    def load_models(self, sam_predictor):
         if SegGPT.model is None:
             SegGPT.model = prepare_model(ckpt_path, model, colors.seg_type).to(device)
         self.model = SegGPT.model
@@ -245,7 +254,6 @@ class SegGPT(DetectionBaseModel):
             if SegGPT.sam_predictor is None:
                 SegGPT.sam_predictor = load_SAM()
             self.sam_predictor = SegGPT.sam_predictor
-
 
 
 from supervision.dataset.utils import approximate_mask_with_polygons

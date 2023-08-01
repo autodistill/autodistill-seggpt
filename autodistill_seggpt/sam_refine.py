@@ -8,6 +8,7 @@ sam_res = (256, 256)
 
 eps = 1e-6
 
+
 def refine_detections(
     img: np.ndarray,
     detections: sv.Detections,
@@ -32,7 +33,9 @@ def refine_detections(
         except:
             print("det_mask.shape", det_mask.shape)
             print("det_mask.dtype", det_mask.dtype)
-            raise Exception(f"det_mask.shape: {det_mask.shape}, det_mask.dtype: {det_mask.dtype}")
+            raise Exception(
+                f"det_mask.shape: {det_mask.shape}, det_mask.dtype: {det_mask.dtype}"
+            )
 
         mask_input = resized_mask[None, ...] if use_masks else None
         masks_np, iou_predictions, low_res_masks = predictor.predict(
@@ -78,8 +81,11 @@ def refine_detections(
         detections.mask = np.zeros_like((0, h, w))
     return detections
 
+
 def _load_sam(sam_type: str = "vit_h") -> SamPredictor:
-    raise NotImplementedError("This doesn't handle any downloading! Use rf_segment_anything load_SAM instead.")
+    raise NotImplementedError(
+        "This doesn't handle any downloading! Use rf_segment_anything load_SAM instead."
+    )
     if sam_type == "vit_h":
         sam_type, sam_ckpt = "vit_h", "weights/sam_vit_h_4b8939.pth"
         sam = sam_model_registry[sam_type](checkpoint=sam_ckpt).cuda()
@@ -96,12 +102,13 @@ def _load_sam(sam_type: str = "vit_h") -> SamPredictor:
     return predictor
 
 
-
 import os
 import urllib.request
+
 import torch
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
 def load_SAM():
     # Check if segment-anything library is already installed

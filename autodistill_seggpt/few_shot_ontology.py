@@ -13,6 +13,7 @@ from supervision.dataset.core import DetectionDataset
 # move the searching/etc. logic into find_best_examples.
 # Maybe also try to make nice/quick serialization for shareability.
 
+
 @dataclass
 class FewShotOntology(DetectionOntology):
     def __init__(
@@ -21,7 +22,7 @@ class FewShotOntology(DetectionOntology):
         # each tuple in the list has form:
         # ( (training_class_name, [reference_image_ids]), output_class_name )]))
         # i.e. ( ("1-climbing-holds",["demo-holds-1.jpg","demo-holds-2.jpg"]), "climbing-hold" )
-        ontology: List[Tuple[Tuple[str, List[str]], str]]=None,
+        ontology: List[Tuple[Tuple[str, List[str]], str]] = None,
     ):
         self.ref_dataset = ref_dataset
 
@@ -40,16 +41,19 @@ class FewShotOntology(DetectionOntology):
                 for i in classes.tolist():
                     class_name = ref_dataset.classes[i]
                     class_name_to_id[class_name] = i
-            
-            ontology = CaptionOntology({
-                f"{i}-{cls_name}":cls_name for cls_name, i in class_name_to_id.items()
-            })
+
+            ontology = CaptionOntology(
+                {
+                    f"{i}-{cls_name}": cls_name
+                    for cls_name, i in class_name_to_id.items()
+                }
+            )
 
             from .find_best_examples import find_best_examples
             from .seggpt import SegGPT
 
             best_examples = find_best_examples(ref_dataset, SegGPT)
-            print("best_examples",best_examples)
+            print("best_examples", best_examples)
             ontology = FewShotOntology.examples_to_tuples(ontology, best_examples)
 
         self.ontology = ontology
@@ -109,7 +113,7 @@ class FewShotOntology(DetectionOntology):
                 new_key.append((image, detections))
             rich_ontology.append((new_key, val))
         return rich_ontology
-    
+
     @staticmethod
     def examples_to_tuples(
         ontology: CaptionOntology,

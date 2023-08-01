@@ -4,6 +4,7 @@ from .colors import palette
 
 eps = 1e-10
 
+
 def quantize(img):
     # quantize image to palette
     if not isinstance(img, np.ndarray):
@@ -27,7 +28,10 @@ def quantize(img):
     img = black_palette[idx]
     return img.astype("uint8")
 
+
 from scipy.ndimage.measurements import label
+
+
 def quantized_to_bitmasks(img, palette):
     # get "components" of each color
     filtered_components = []
@@ -48,6 +52,7 @@ def quantized_to_bitmasks(img, palette):
 
 
 import supervision as sv
+
 
 def bitmasks_to_detections(bitmasks, catId):
     class_id = np.asarray([catId]).astype("int64")

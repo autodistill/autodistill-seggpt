@@ -72,12 +72,13 @@ def shrink_dataset_to_size(
     )
 
 
+from typing import List
+
 import numpy as np
 import supervision as sv
 
 from .few_shot_ontology import FewShotOntology
 
-from typing import List
 
 # This acts like an oracle for a given FewShotOntology.
 def extract_classes_from_dataset(
