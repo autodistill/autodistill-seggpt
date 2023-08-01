@@ -5,7 +5,7 @@
 import supervision as sv
 from supervision.dataset.core import DetectionDataset
 from autodistill.detection import DetectionBaseModel
-from autodistill import CaptionOntology
+from autodistill.detection import CaptionOntology
 from .few_shot_ontology import FewShotOntology
 
 from .metrics import metrics_registry,Metric
@@ -65,13 +65,11 @@ def find_best_examples(
         # get best example set for this class
         examples_scores = []
 
-        gt_dataset = extract_classes_from_dataset(ref_dataset,CaptionOntology({
-            cls:cls
-        }))
+        gt_dataset = extract_classes_from_dataset(ref_dataset,[i])
 
         positive_examples = [img_name for img_name,detections in gt_dataset.annotations.items() if len(detections)>0]
 
-        # TODO use CLIP to find a diverse (but small/lightweight) valid set.
+        # TODO use CLIP to find a small AND diverse valid set.
         gt_dataset = shrink_dataset_to_size(gt_dataset,max_test_imgs)
         
         if len(positive_examples)==0:

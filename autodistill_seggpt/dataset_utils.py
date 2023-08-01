@@ -77,21 +77,17 @@ import supervision as sv
 
 from .few_shot_ontology import FewShotOntology
 
+from typing import List
 
 # This acts like an oracle for a given FewShotOntology.
 def extract_classes_from_dataset(
-    old_dataset: DetectionDataset, ontology: FewShotOntology
+    old_dataset: DetectionDataset, class_ids: List[int]
 ) -> DetectionDataset:
-    classes = ontology.classes()
 
     new_annotations = {}
     for img_name, detections in old_dataset.annotations.items():
         new_detectionss = []
-        for new_class_id, cls in enumerate(classes):
-            prompt = ontology.classToPrompt(cls)
-            prompt_name, _ = prompt
-            class_id = int(prompt_name.split("-")[0])
-
+        for new_class_id, class_id in enumerate(class_ids):
             new_detections = detections[detections.class_id == class_id]
             new_detections.class_id = (
                 np.ones_like(new_detections.class_id) * new_class_id
@@ -100,6 +96,7 @@ def extract_classes_from_dataset(
             new_detectionss.append(new_detections)
         new_annotations[img_name] = sv.Detections.merge(new_detectionss)
 
+    classes = [old_dataset.classes[class_id] for class_id in class_ids]
     return sv.DetectionDataset(
         classes=classes, images=old_dataset.images, annotations=new_annotations
     )
