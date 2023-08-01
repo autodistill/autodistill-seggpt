@@ -1,6 +1,10 @@
+model_url = "https://huggingface.co/BAAI/SegGPT/resolve/main/seggpt_vit_large.pth"
+ckpt_name = "seggpt_vit_large.pth"
+ckpt_path = None
 
 import os
 import subprocess
+import sys
 def check_dependencies():
     # Create the ~/.cache/autodistill directory if it doesn't exist
     autodistill_dir = os.path.expanduser("~/.cache/autodistill")
@@ -12,13 +16,28 @@ def check_dependencies():
         import detectron2
     except ImportError:
         subprocess.run(["pip", "install", "git+https://github.com/facebookresearch/detectron2.git"])
+    
+    # Check if SegGPT is installed
+    seggpt_path = os.path.join(autodistill_dir, "Painter","SegGPT","SegGPT_Inference")
+    if not os.path.isdir(seggpt_path):
+        subprocess.run(["git", "clone", "https://github.com/baaivision/Painter.git"])
 
-    weights_path = os.path.join(autodistill_dir, ckpt_path)
-    if not os.path.exists(weights_path):
+        sys.path.append(seggpt_path)
+
+        curr_dir = os.getcwd()
+        
+        os.chdir(seggpt_path)
+
+        models_dir = os.path.join(seggpt_path, "models")
+        os.makedirs(models_dir, exist_ok=True)
+
+        global ckpt_path
+        ckpt_path = os.path.join(models_dir, ckpt_name)
+
         print("Downloading SegGPT weights...")
-        # os.system(["wget", model_url, "-O", weights_path])
-        # using f"" strings:
-        os.system(f"wget {model_url} -O {weights_path}")
+        subprocess.run(["wget", model_url, "-O", ckpt_path])
+
+        os.chdir(curr_dir)
 
 check_dependencies()
 
@@ -31,18 +50,15 @@ import cv2
 import numpy as np
 import supervision as sv
 import torch
-from autodistill.core import Ontology
-from autodistill.detection import DetectionBaseModel, DetectionOntology
+from autodistill.detection import DetectionBaseModel
 from PIL import Image
 
 # SegGPT repo files
-from seggpt.seggpt_engine import run_one_image
-from seggpt.seggpt_inference import prepare_model
+from seggpt_engine import run_one_image
+from seggpt_inference import prepare_model
 
-# SAM files
 from segment_anything import SamPredictor
 from supervision import Detections
-from supervision.dataset.core import DetectionDataset
 from torch.nn import functional as F
 
 # Model/dataset parameters - don't need to be configurable
@@ -50,9 +66,7 @@ from torch.nn import functional as F
 imagenet_mean = np.array([0.485, 0.456, 0.406])
 imagenet_std = np.array([0.229, 0.224, 0.225])
 
-model_url = "https://huggingface.co/BAAI/SegGPT/resolve/main/seggpt_vit_large.pth"
-ckpt_path = "seggpt_vit_large.pth"
-device = torch.device("cuda")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = "seggpt_vit_large_patch16_input896x448"
 
 res, hres = 448, 448
