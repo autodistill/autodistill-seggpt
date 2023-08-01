@@ -1,5 +1,5 @@
 from autodistill_seggpt import SegGPT,FewShotOntology
-
+import supervision as sv
 
 #
 # download dataset with a few labelled images (5-10 is recommended, but you can go as high as you like)

@@ -64,21 +64,12 @@ def find_best_examples(
         # get best example set for this class
         examples_scores = []
 
-        positive_examples = []
-        gt_detections = {}
+        gt_dataset = extract_classes_from_dataset(ref_dataset,CaptionOntology({
+            cls:cls
+        }))
 
-        for img_name in ref_dataset.images:
-            detections = ref_dataset.annotations[img_name]
-            detections = detections[detections.class_id==np.array([i])]
-            detections.class_id = np.zeros_like(detections.class_id) # we use only one class for each ontology
+        positive_examples = [img_name for img_name,detections in gt_dataset.annotations.items() if len(detections)>0]
 
-            gt_detections[img_name] = detections
-
-            if len(detections)>0:
-                positive_examples.append(img_name)
-        
-        # reduce the num of test images - keeps search time low
-        gt_dataset = DetectionDataset(classes=[cls],images=ref_dataset.images,annotations=gt_detections)
         gt_dataset = shrink_dataset_to_size(gt_dataset,max_test_imgs)
         
         if len(positive_examples)==0:
@@ -98,34 +89,18 @@ def find_best_examples(
 
         for combo_hash in combo_pbar:
             image_choices = combo_hash_to_choices(combo_hash,positive_examples,num_examples) 
-
             onto_tuples = [(
                 (cls,image_choices),
                 cls
             )]
 
             ontology = FewShotOntology(ref_dataset,onto_tuples)
-
             model = model_class(ontology) # model must take only an Ontology as a parameter
-
             pred_dataset = label_dataset(gt_dataset,model)
-
-            # pred_detections = {}
-
-            # # inference on dataset
-            # for img_name in gt_dataset.images:
-            #     img = gt_dataset.images[img_name]
-            #     detections = model.predict(img)
-            #     pred_detections[img_name] = detections
-            
-            # pred_dataset = DetectionDataset(classes=[cls],images=gt_dataset.images,annotations=pred_detections)
-
             score = metric(gt_dataset,pred_dataset).tolist()
 
             examples_scores.append((image_choices,score))
-
             max_or_min = max if metric_direction==1 else min
-
             max_score = max_or_min(max_score,score)
             combo_pbar.set_description(f"Best {metric_name}: {round(max_score,2)}")
         

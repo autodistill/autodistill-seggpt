@@ -111,7 +111,7 @@ class SegGPT(DetectionBaseModel):
         # draw masks onto image
         mask = np.zeros_like(og_img)
         for detection in detections:
-            curr_rgb = colors.next_rgb()
+            curr_rgb = colors.next_color()
             det_box, det_mask, *_ = detection
 
             mh, mw = det_mask.shape
