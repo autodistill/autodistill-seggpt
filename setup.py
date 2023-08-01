@@ -11,16 +11,24 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="template-python-zuppif#1",  
+    name="autodistill-seggpt",  
     version=version,
-    author="zuppif",
-    author_email="francesco.zuppichini@gmail.com",
-    description="<INSERT_DESCRIPTION>",
+    author="andrew-healey",
+    author_email="andrew@roboflow.com",
+    description="SegGPT for use with Autodistill",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    url="https://github.com/autodistill/autodistill-seggpt",
     install_requires=[
-      # list your requires
+        "torch",
+        "autodistill",
+        "numpy>=1.20.0",
+        "opencv-python>=4.6.0",
+        "rf_segment_anything",
+        "supervision",
+        "pycocotools",
+        "timm",
+        "git+https://github.com/facebookresearch/detectron2.git"
     ],
     packages=find_packages(exclude=("tests",)),
     extras_require={
@@ -31,5 +39,5 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.8",
 )

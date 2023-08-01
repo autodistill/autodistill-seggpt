@@ -11,8 +11,6 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 
-
-
 @dataclass
 class FewShotOntology(DetectionOntology):
     def __init__(self,
@@ -31,6 +29,7 @@ class FewShotOntology(DetectionOntology):
         self.rich_ontology = rich_ontology
     
     
+    # DetectionOntology methods
     def prompts(self)->List[Tuple[str,List[str]]]:
         return [key for key,val in self.ontology]
     def classes(self)->List[str]:
@@ -55,7 +54,7 @@ class FewShotOntology(DetectionOntology):
                 return val
         raise Exception("No class found for prompt.")
 
-    # using lists-of-pairs instead of dicts:
+    # Turn filenames into images and detections
     def enrich_ontology(self, ontology: List[Tuple[
                         Tuple[str,List[str]],
                         str
