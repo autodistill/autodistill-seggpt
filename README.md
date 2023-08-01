@@ -40,10 +40,10 @@ Note: this adds some complexity--`autodistill_seggpt` is BYOD--bring your own da
 
 ```python
 from autodistill_seggpt import SegGPT,FewShotOntology
-
+import supervision as sv
 
 #
-# Download a Roboflow dataset with a few labelled images (5-10 is recommended, but you can go as high as you like)
+# download dataset with a few labelled images (5-10 is recommended, but you can go as high as you like)
 #
 from roboflow import login,Roboflow
 
@@ -58,6 +58,10 @@ climbing_dataset = sv.DetectionDataset.from_coco(
     annotations_path=f"{dataset.location}/train/_annotations.coco.json",
     force_masks=True
 )
+
+#
+# Create ontology
+#
 
 climbing_ontology = FewShotOntology(climbing_dataset)
 

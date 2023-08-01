@@ -9,12 +9,6 @@ from autodistill.detection import CaptionOntology, DetectionBaseModel, Detection
 from supervision import Detections
 from supervision.dataset.core import DetectionDataset
 
-from .find_best_examples import find_best_examples
-
-def default_model():
-    from seggpt import SegGPT
-    return SegGPT()
-
 @dataclass
 class FewShotOntology(DetectionOntology):
     def __init__(
@@ -36,7 +30,7 @@ class FewShotOntology(DetectionOntology):
 
             class_name_to_id = {}
 
-            for detections in ref_dataset.annotations.vals():
+            for detections in ref_dataset.annotations.values():
                 # get unique classes in this image
                 classes = np.unique(detections.class_id)
                 for i in classes.tolist():
@@ -47,7 +41,10 @@ class FewShotOntology(DetectionOntology):
                 f"{i}-{cls_name}":cls_name for cls_name, i in class_name_to_id.items()
             }
 
-            best_examples = find_best_examples(ref_dataset, default_model)
+            from .find_best_examples import find_best_examples
+            from .seggpt import SegGPT
+
+            best_examples = find_best_examples(ref_dataset, SegGPT)
             ontology = FewShotOntology.examples_to_tuples(ontology, best_examples)
 
         self.ontology = ontology

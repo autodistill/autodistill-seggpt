@@ -15,7 +15,7 @@ from seggpt.seggpt_engine import run_one_image
 from seggpt.seggpt_inference import prepare_model
 
 # SAM files
-from segment_anything import SamPredictor,load_SAM
+from segment_anything import SamPredictor
 from supervision import Detections
 from supervision.dataset.core import DetectionDataset
 from torch.nn import functional as F
@@ -36,7 +36,7 @@ res, hres = 448, 448
 from . import colors
 from .few_shot_ontology import FewShotOntology
 from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitmasks
-from .sam_refine import refine_detections
+from .sam_refine import refine_detections,load_SAM
 
 use_colorings = True
 
@@ -51,7 +51,9 @@ def check_dependencies():
     weights_path = os.path.join(autodistill_dir, ckpt_path)
     if not os.path.exists(weights_path):
         print("Downloading SegGPT weights...")
-        os.system(["wget", model_url, "-O", weights_path])
+        # os.system(["wget", model_url, "-O", weights_path])
+        # using f"" strings:
+        os.system(f"wget {model_url} -O {weights_path}")
 
 check_dependencies()
 
@@ -108,7 +110,6 @@ class SegGPT(DetectionBaseModel):
 
         # draw masks onto image
         mask = np.zeros_like(og_img)
-        colors.reset_colors()
         for detection in detections:
             curr_rgb = colors.next_rgb()
             det_box, det_mask, *_ = detection

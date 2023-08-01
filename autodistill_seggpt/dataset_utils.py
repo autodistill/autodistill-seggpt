@@ -8,7 +8,7 @@ from tqdm import tqdm
 # Note: in an ideal world, this would eventually become a DetectionBaseModel method.
 # But notice that it requires model.predict() to take in an np.ndarray--but the existing DetectionBaseModel.predict() takes in a filename.
 def label_dataset(
-    dataset: DetectionDataset, model: DetectionBaseModel
+    dataset: DetectionDataset, model: DetectionBaseModel, use_tqdm: bool = False
 ) -> DetectionDataset:
     if len(dataset.images) == 0:
         # copy dataset
@@ -30,7 +30,9 @@ def label_dataset(
     # now label all images in dataset
     pred_annotations = {}
 
-    for img_name, img in tqdm(dataset.images.items()):
+    itr = tqdm(dataset.images.items()) if use_tqdm else dataset.images.items()
+
+    for img_name, img in itr:
         detections = model.predict(img)
 
         if dataset_has_masks and detections.mask is None:
