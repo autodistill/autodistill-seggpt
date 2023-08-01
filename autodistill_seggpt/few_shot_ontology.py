@@ -37,14 +37,15 @@ class FewShotOntology(DetectionOntology):
                     class_name = ref_dataset.classes[i]
                     class_name_to_id[class_name] = i
             
-            ontology = {
+            ontology = CaptionOntology({
                 f"{i}-{cls_name}":cls_name for cls_name, i in class_name_to_id.items()
-            }
+            })
 
             from .find_best_examples import find_best_examples
             from .seggpt import SegGPT
 
             best_examples = find_best_examples(ref_dataset, SegGPT)
+            print("best_examples",best_examples)
             ontology = FewShotOntology.examples_to_tuples(ontology, best_examples)
 
         self.ontology = ontology
