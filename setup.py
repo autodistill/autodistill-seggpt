@@ -25,7 +25,7 @@ setuptools.setup(
         "numpy>=1.20.0",
         "opencv-python>=4.6.0",
         "rf_segment_anything",
-        "supervision",
+        "supervision>=0.12.0",
         "pycocotools",
         "timm",
     ],

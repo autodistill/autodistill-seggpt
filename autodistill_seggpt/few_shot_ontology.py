@@ -9,6 +9,10 @@ from autodistill.detection import CaptionOntology, DetectionBaseModel, Detection
 from supervision import Detections
 from supervision.dataset.core import DetectionDataset
 
+# TODO turn FewShotOntology into a thin wrapper around DetectionDataset
+# move the searching/etc. logic into find_best_examples.
+# Maybe also try to make nice/quick serialization for shareability.
+
 @dataclass
 class FewShotOntology(DetectionOntology):
     def __init__(

@@ -1,3 +1,28 @@
+
+import os
+import subprocess
+def check_dependencies():
+    # Create the ~/.cache/autodistill directory if it doesn't exist
+    autodistill_dir = os.path.expanduser("~/.cache/autodistill")
+    os.makedirs(autodistill_dir, exist_ok=True)
+    
+    os.chdir(autodistill_dir)
+
+    try:
+        import detectron2
+    except ImportError:
+        subprocess.run(["pip", "install", "git+https://github.com/facebookresearch/detectron2.git"])
+
+    weights_path = os.path.join(autodistill_dir, ckpt_path)
+    if not os.path.exists(weights_path):
+        print("Downloading SegGPT weights...")
+        # os.system(["wget", model_url, "-O", weights_path])
+        # using f"" strings:
+        os.system(f"wget {model_url} -O {weights_path}")
+
+check_dependencies()
+
+
 from dataclasses import dataclass
 from math import inf
 from typing import Dict, List, Tuple, Union
@@ -39,23 +64,6 @@ from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitma
 from .sam_refine import refine_detections,load_SAM
 
 use_colorings = True
-
-import os
-def check_dependencies():
-    # Create the ~/.cache/autodistill directory if it doesn't exist
-    autodistill_dir = os.path.expanduser("~/.cache/autodistill")
-    os.makedirs(autodistill_dir, exist_ok=True)
-    
-    os.chdir(autodistill_dir)
-
-    weights_path = os.path.join(autodistill_dir, ckpt_path)
-    if not os.path.exists(weights_path):
-        print("Downloading SegGPT weights...")
-        # os.system(["wget", model_url, "-O", weights_path])
-        # using f"" strings:
-        os.system(f"wget {model_url} -O {weights_path}")
-
-check_dependencies()
 
 @dataclass
 class SegGPT(DetectionBaseModel):

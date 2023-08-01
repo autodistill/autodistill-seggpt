@@ -5,11 +5,12 @@
 import supervision as sv
 from supervision.dataset.core import DetectionDataset
 from autodistill.detection import DetectionBaseModel
+from autodistill import CaptionOntology
 from .few_shot_ontology import FewShotOntology
 
 from .metrics import metrics_registry,Metric
 
-from .dataset_utils import label_dataset,shrink_dataset_to_size
+from .dataset_utils import label_dataset,shrink_dataset_to_size,extract_classes_from_dataset
 
 # metric,metric_name,metric_direction = metrics_registry["mAP"]
 
@@ -70,6 +71,7 @@ def find_best_examples(
 
         positive_examples = [img_name for img_name,detections in gt_dataset.annotations.items() if len(detections)>0]
 
+        # TODO use CLIP to find a diverse (but small/lightweight) valid set.
         gt_dataset = shrink_dataset_to_size(gt_dataset,max_test_imgs)
         
         if len(positive_examples)==0:
