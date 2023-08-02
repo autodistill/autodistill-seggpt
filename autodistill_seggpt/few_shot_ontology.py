@@ -13,6 +13,13 @@ from supervision.dataset.core import DetectionDataset
 # move the searching/etc. logic into find_best_examples.
 # Maybe also try to make nice/quick serialization for shareability.
 
+def default_model(ontology: FewShotOntology) -> DetectionBaseModel:
+    from .seggpt import SegGPT
+
+    return SegGPT(
+        ontology=ontology,
+        refine_detections=False, # disable this since we don't use SAM feature map caching (or MobileSAM) yet. So SAM slows us down big-time.
+    )
 
 @dataclass
 class FewShotOntology(DetectionOntology):
@@ -50,9 +57,8 @@ class FewShotOntology(DetectionOntology):
             )
 
             from .find_best_examples import find_best_examples
-            from .seggpt import SegGPT
 
-            best_examples = find_best_examples(ref_dataset, SegGPT)
+            best_examples = find_best_examples(ref_dataset, default_model)
             print("best_examples", best_examples)
             ontology = FewShotOntology.examples_to_tuples(ontology, best_examples)
 

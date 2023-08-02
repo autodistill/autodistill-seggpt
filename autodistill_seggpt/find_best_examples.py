@@ -4,7 +4,7 @@
 # Then combine those best-performing k-example-image-sets into a single ontology.
 import math
 from random import sample
-from typing import List, Type, Union
+from typing import List, Type, Union, Callable
 
 import numpy as np
 import supervision as sv
@@ -50,7 +50,7 @@ def use_all_examples(ref_dataset: DetectionDataset):
 
 def find_best_examples(
     ref_dataset: DetectionDataset,
-    model_class: Type[DetectionBaseModel],
+    model_class: Callable[[FewShotOntology], DetectionBaseModel],
     num_examples: int = 2,
     num_trials: int = 5,
     max_test_imgs: int = 10,
@@ -104,9 +104,7 @@ def find_best_examples(
             onto_tuples = [((cls_deduped, image_choices), cls)]
 
             ontology = FewShotOntology(ref_dataset, onto_tuples)
-            model = model_class(
-                ontology
-            )  # model must take only an Ontology as a parameter
+            model = model_class(ontology)  # model must take only an Ontology as a parameter
             pred_dataset = label_dataset(gt_dataset, model)
             score = metric(gt_dataset, pred_dataset).tolist()
 
