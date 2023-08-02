@@ -13,7 +13,7 @@
 
 This repository contains the code supporting the SegGPT base model for use with [Autodistill](https://github.com/autodistill/autodistill).
 
-[SegGPT](https://github.com/baaivision/Painter/tree/main/SegGPT) is a transformer-based few-shot semantic segmentation model developed by [BAAI Vision](https://github.com/baaivision).
+[SegGPT](https://github.com/baaivision/Painter/tree/main/SegGPT) is a transformer-based, few-shot semantic segmentation model developed by [BAAI Vision](https://github.com/baaivision).
 
 This model performs well on task-specific segmentation tasks when given a few labeled images from which to learn features about the objects you want to identify.
 
@@ -23,8 +23,7 @@ Read the [SegGPT Autodistill documentation](https://autodistill.github.io/autodi
 
 ## Installation
 
-To use SegGPT with autodistill, you need to install the following dependency:
-
+To use SegGPT with Autodistill, you need to install the following dependency:
 
 ```bash
 pip3 install autodistill-seggpt
@@ -32,14 +31,14 @@ pip3 install autodistill-seggpt
 
 ## About SegGPT
 
-This Autodistill module uses a handful of pre-labelled images for improved accuracy.
+SegGPT performs "in-context" segmentation. This means it requires a handful of pre-labelled "context" images.
 
 You will need some labeled images to use SegGPT. Don't have any labeled images? Check out [Roboflow Annotate](https://roboflow.com/annotate), a feature-rich annotation tool from which you can export data for use with Autodistill.
 
 ## Quickstart
 
 ```python
-from autodistill_seggpt import SegGPT,FewShotOntology
+from autodistill_seggpt import SegGPT, FewShotOntology
 
 base_model = SegGPT(
     ontology=FewShotOntology(supervision_dataset)
@@ -52,13 +51,13 @@ base_model.label("./unlabelled-climbing-photos", extension=".jpg")
 
 Labelling and importing images is easy!
 
-You can use [Roboflow Annotate](https://roboflow.com/annotate) to label a few images (5-10 should work fine). For your Project Type, make sure to pick Instance Segmentation--you'll be labelling with polygons.
+You can use [Roboflow Annotate](https://roboflow.com/annotate) to label a few images (5-10 should work fine). For your Project Type, make sure to pick Instance Segmentation, as you will be labelling with polygons.
 
-Once you've labelled your images, you can press Generate > Generate New Version. You can use all the default options--no Augmentations are necessary.
+Once you have labelled your images, you can press Generate > Generate New Version. You can use all the default options--no Augmentations are necessary.
 
 Once your dataset version is generated, you can press Export > Continue.
 
-Then you'll get some download code to copy--it should look something like this:
+Then you will get some download code to copy. It should look something like this:
 
 ```python
 !pip install roboflow
@@ -69,10 +68,13 @@ project = rf.workspace("lorem-ipsum").project("dolor-sit-amet")
 dataset = project.version(1).download("yolov8")
 ```
 
+Note: if you are not using a notebook environment, you should remove `!pip install roboflow` from your code, and run `pip install roboflow` in your terminal instead.
+
 To import your dataset into Autodistill, run the following:
 
 ```py
 import supervision as sv
+
 supervision_dataset = sv.DetectionDataset.from_yolo(
     images_directory_path=f"{dataset.location}/train/images",
     annotations_directory_path=f"{dataset.location}/train/labels",
