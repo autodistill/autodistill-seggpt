@@ -83,8 +83,10 @@ def find_best_examples(
         if len(positive_examples) == 0:
             best_examples[cls_deduped] = []
             continue
+        
+        curr_num_examples = min(num_examples, len(positive_examples))
 
-        num_combos = choose(len(positive_examples), num_examples)
+        num_combos = choose(len(positive_examples), curr_num_examples)
 
         num_iters = min(num_combos, num_trials)
         combo_hashes = range(num_combos)
@@ -97,7 +99,7 @@ def find_best_examples(
 
         for combo_hash in combo_pbar:
             image_choices = combo_hash_to_choices(
-                combo_hash, positive_examples, min(num_examples, len(positive_examples))
+                combo_hash, positive_examples, curr_num_examples)
             )
             onto_tuples = [((cls_deduped, image_choices), cls)]
 
