@@ -99,7 +99,7 @@ def find_best_examples(
 
         for combo_hash in combo_pbar:
             image_choices = combo_hash_to_choices(
-                combo_hash, positive_examples, curr_num_examples)
+                combo_hash, positive_examples, curr_num_examples
             )
             onto_tuples = [((cls_deduped, image_choices), cls)]
 
