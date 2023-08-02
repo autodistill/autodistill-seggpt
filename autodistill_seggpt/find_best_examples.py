@@ -97,7 +97,7 @@ def find_best_examples(
 
         for combo_hash in combo_pbar:
             image_choices = combo_hash_to_choices(
-                combo_hash, positive_examples, num_examples
+                combo_hash, positive_examples, min(num_examples, len(positive_examples))
             )
             onto_tuples = [((cls_deduped, image_choices), cls)]
 
@@ -121,9 +121,11 @@ def find_best_examples(
 def combo_hash_to_choices(
     fact: int, candidates: List[any], num_choices: int
 ) -> List[any]:
+    assert len(candidates) >= num_choices, "Not enough candidates to choose from."
+
     chosen = []
     curr_fact = fact
-    remaining_candidates = candidates
+    remaining_candidates = [*candidates]
     for i in range(num_choices, 0, -1):
         which_remaining_candidate = curr_fact % i
         chosen.append(remaining_candidates.pop(which_remaining_candidate))
