@@ -86,10 +86,10 @@ def find_best_examples(
         
         curr_num_examples = min(num_examples, len(positive_examples))
 
-        num_combos = choose(len(positive_examples), curr_num_examples)
+        num_perms = perm(len(positive_examples), curr_num_examples)
 
-        num_iters = min(num_combos, num_trials)
-        combo_hashes = range(num_combos)
+        num_iters = min(num_perms, num_trials)
+        combo_hashes = range(num_perms)
         sub_combo_hashes = sample(combo_hashes, num_iters)
 
         print(f"Finding best examples for class {cls_deduped}.")
@@ -135,6 +135,8 @@ def combo_hash_to_choices(
 
 import math
 
+def perm(n, k):
+    return int(math.factorial(n) / math.factorial(n - k))
 
 def choose(n, k):
     return int(math.factorial(n) / (math.factorial(k) * math.factorial(n - k)))
