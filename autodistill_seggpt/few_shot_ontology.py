@@ -59,7 +59,6 @@ class FewShotOntology(DetectionOntology):
             from .find_best_examples import find_best_examples
 
             best_examples = find_best_examples(ref_dataset, default_model)
-            print("best_examples", best_examples)
             ontology = FewShotOntology.examples_to_tuples(ontology, best_examples)
 
         self.ontology = ontology
