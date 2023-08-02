@@ -4,12 +4,19 @@ from supervision import DetectionDataset
 from tqdm import tqdm
 
 
-# Run a BaseModel on every image in a dataset and return a new dataset with the predictions.
 # Note: in an ideal world, this would eventually become a DetectionBaseModel method.
 # But notice that it requires model.predict() to take in an np.ndarray--but the existing DetectionBaseModel.predict() takes in a filename.
 def label_dataset(
     dataset: DetectionDataset, model: DetectionBaseModel, use_tqdm: bool = False
 ) -> DetectionDataset:
+    """
+    Run a BaseModel on every image in a dataset and return a new dataset with the predictions.
+
+    Keyword arguments:
+    dataset -- the dataset to label
+    model -- the base model which will label the dataset. Note: must support predict(img:np.ndarray).
+    use_tqdm -- whether to show a progress bar
+    """
     if len(dataset.images) == 0:
         # copy dataset
         return DetectionDataset(
@@ -53,14 +60,25 @@ def label_dataset(
 from random import sample
 
 
-# Pick a random k example images for each target class
 def shrink_dataset_to_size(
     dataset: DetectionDataset, max_imgs: int = 15
 ) -> DetectionDataset:
+    """
+    Pick a random subset of the dataset.
+
+    Keyword arguments:
+    dataset -- the dataset to shrink
+    max_imgs -- the maximum number of images to keep in the dataset
+    """
     imgs = list(dataset.images.keys())
 
     if len(imgs) <= max_imgs:
-        return dataset
+        # copy dataset
+        return DetectionDataset(
+            classes=dataset.classes,
+            images={*dataset.images},
+            annotations={*dataset.annotations},
+        )
 
     imgs = sample(imgs, max_imgs)
 
@@ -84,6 +102,14 @@ from .few_shot_ontology import FewShotOntology
 def extract_classes_from_dataset(
     old_dataset: DetectionDataset, class_ids: List[int]
 ) -> DetectionDataset:
+    """
+    Extract a subset of classes from a dataset.
+    This re-maps the class_ids to be contiguous.
+
+    Keyword arguments:
+    old_dataset -- the dataset to extract from
+    class_ids -- the class_ids (as integers) to extract
+    """
 
     new_annotations = {}
     for img_name, detections in old_dataset.annotations.items():

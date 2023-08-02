@@ -8,7 +8,7 @@ from typing import List, Type, Union, Callable
 
 import numpy as np
 import supervision as sv
-from autodistill.detection import CaptionOntology, DetectionBaseModel
+from autodistill.detection import DetectionBaseModel
 from supervision.dataset.core import DetectionDataset
 from tqdm import tqdm
 
@@ -19,13 +19,6 @@ from .dataset_utils import (
 )
 from .few_shot_ontology import FewShotOntology
 from .metrics import Metric, metrics_registry
-
-# metric,metric_name,metric_direction = metrics_registry["mAP"]
-
-
-
-
-
 
 # TODO: make multiple eval metrics. A metric could fit the interface get_score(gt_dataset,pred_dataset)->float,str.
 # The float is the score, the str is a human-readable description of the score (plus some extra metadata like mAP-large, etc.)

@@ -95,6 +95,14 @@ class SegGPT(DetectionBaseModel):
         refine_detections: bool = True,
         sam_predictor=None,
     ):
+        """
+        Initialize a SegGPT base model.
+
+        Keyword arguments:
+        ontology -- the FewShotOntology to use for this model.
+        refine_detections -- whether to refine SegGPT's mask predictions with SAM. This makes inference slower, but usually more accurate.
+        sam_predictor -- a SamPredictor object to use for refining detections. If None, a default SamPredictor will be created.
+        """
 
         self.ontology = ontology
         self.refine_detections = refine_detections
@@ -247,7 +255,7 @@ class SegGPT(DetectionBaseModel):
             SegGPT.model = prepare_model(ckpt_path, model, colors.seg_type).to(device)
         self.model = SegGPT.model
 
-        # We load the SAM predictor if it's a) needed and b) not already loaded.
+        # We load the SAM predictor iff it's a) needed and b) not already loaded.
         if sam_predictor is not None or not self.refine_detections:
             self.sam_predictor = sam_predictor
         else:
