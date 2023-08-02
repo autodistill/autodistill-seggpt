@@ -76,7 +76,8 @@ import supervision as sv
 supervision_dataset = sv.DetectionDataset.from_yolo(
     images_directory_path=f"{dataset.location}/train/images",
     annotations_directory_path=f"{dataset.location}/train/labels",
-    data_yaml_path=f"{dataset.location}/data.yaml"
+    data_yaml_path=f"{dataset.location}/data.yaml",
+    force_masks=True
 )
 ```
 
