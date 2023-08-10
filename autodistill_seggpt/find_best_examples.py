@@ -44,9 +44,9 @@ def use_all_examples(ref_dataset: DetectionDataset):
 def find_best_examples(
     ref_dataset: DetectionDataset,
     model_class: Callable[[FewShotOntology], DetectionBaseModel],
-    num_examples: int = 2,
-    num_trials: int = 5,
-    max_test_imgs: int = 10,
+    num_examples: int = 5,
+    num_trials: int = 1,
+    max_test_imgs: int = 5,
     which_metric: Union[str, Metric] = "iou",
 ):
     best_examples = {}
