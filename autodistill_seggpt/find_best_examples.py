@@ -44,11 +44,12 @@ def use_all_examples(ref_dataset: DetectionDataset):
 def find_best_examples(
     ref_dataset: DetectionDataset,
     model_class: Callable[[FewShotOntology], DetectionBaseModel],
-    num_examples: int = 5,
+    num_examples: int = 4,
     num_trials: int = 1,
-    max_test_imgs: int = 5,
+    max_test_imgs: int = 10,
     which_metric: Union[str, Metric] = "iou",
 ):
+    print("num_examples",num_examples)
     best_examples = {}
 
     if type(which_metric) == str:
@@ -104,6 +105,7 @@ def find_best_examples(
             examples_scores.append((image_choices, score))
             max_or_min = max if metric_direction == 1 else min
             max_score = max_or_min(max_score, score)
+            # print("score",score)
             combo_pbar.set_description(f"Best {metric_name}: {round(max_score,2)}")
 
         my_best_examples, best_score = max(examples_scores, key=lambda x: x[1])

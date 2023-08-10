@@ -13,7 +13,7 @@ def refine_detections(
     img: np.ndarray,
     detections: sv.Detections,
     predictor: SamPredictor,
-    use_masks=True,
+    use_masks=False,
 ):
     # TODO use each detection mask (or bbox) as a prompt for SAM
 
@@ -58,7 +58,7 @@ def refine_detections(
 
         mask = cv2.resize(masks_np[best_idx].astype(np.uint8), (og_w, og_h))
         mask = mask[None, ...]
-        assert mask.shape == (1, og_h, og_w), f"mask.shape: {mask.shape}"
+        assert mask.shape == (1, og_h, og_w), f"mask.shape: {mask.shape} vs. {(1,og_h,og_w)}"
 
         class_id = np.array([det_cls])
 
