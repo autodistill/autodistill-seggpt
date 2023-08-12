@@ -111,7 +111,8 @@ class SegGPT(DetectionBaseModel):
 
         self.ref_imgs = {}
 
-    def preprocess(self, img: np.ndarray) -> np.ndarray:
+    @staticmethod
+    def preprocess(img: np.ndarray) -> np.ndarray:
         img = cv2.resize(img, dsize=(res, hres))
         img = img / 255.0
         img = img - imagenet_mean
@@ -120,12 +121,13 @@ class SegGPT(DetectionBaseModel):
 
     # convert an img + detections into an img + mask.
     # note: all the detections have the same class in the FewShotOntology.
-    def prepare_ref_img(self, img: np.ndarray, detections: Detections):
+    @staticmethod
+    def prepare_ref_img(img: np.ndarray, detections: Detections):
         ih, iw, _ = img.shape
         og_img = img
 
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = self.preprocess(img)
+        img = SegGPT.preprocess(img)
 
         # draw masks onto image
         mask = np.zeros_like(og_img)
@@ -149,9 +151,28 @@ class SegGPT(DetectionBaseModel):
 
             mask[det_mask] = curr_rgb
 
-        mask = self.preprocess(mask)
+        mask = SegGPT.preprocess(mask)
 
         return img, mask
+
+    # Convert a list of reference images into a SegGPT-friendly batch.
+    @staticmethod
+    def _prepare_ref_imgs(
+        refs: List[Tuple[np.ndarray, Detections]]
+    ):
+        imgs, masks = [], []
+        min_area = inf
+        for ref_img, detections in refs:
+            img, mask = SegGPT.prepare_ref_img(ref_img, detections)
+
+            img_min_area = detections.area.min() if len(detections) > 0 else inf
+            min_area = min(min_area, img_min_area)
+
+            imgs.append(img)
+            masks.append(mask)
+        imgs = np.stack(imgs, axis=0)
+        masks = np.stack(masks, axis=0)
+        return imgs, masks, min_area
 
     # Convert a list of reference images into a SegGPT-friendly batch.
     def prepare_ref_imgs(
@@ -160,19 +181,7 @@ class SegGPT(DetectionBaseModel):
         if cls_name in self.ref_imgs:
             return self.ref_imgs[cls_name]
 
-        imgs, masks = [], []
-        min_area = inf
-        for ref_img, detections in refs:
-            img, mask = self.prepare_ref_img(ref_img, detections)
-
-            img_min_area = detections.area.min()
-            min_area = min(min_area, img_min_area)
-
-            imgs.append(img)
-            masks.append(mask)
-        imgs = np.stack(imgs, axis=0)
-        masks = np.stack(masks, axis=0)
-        ret = (imgs, masks, min_area)
+        ret = SegGPT._prepare_ref_imgs(refs)
         self.ref_imgs[cls_name] = ret
 
         return ret

@@ -76,8 +76,8 @@ def shrink_dataset_to_size(
         # copy dataset
         return DetectionDataset(
             classes=dataset.classes,
-            images={*dataset.images},
-            annotations={*dataset.annotations},
+            images={**dataset.images},
+            annotations={**dataset.annotations},
         )
 
     imgs = sample(imgs, max_imgs)
