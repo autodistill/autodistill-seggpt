@@ -9,45 +9,116 @@ class MetricDirection:
     HIGHER_IS_BETTER = 1
 
 
-Metric = Dict[str, Tuple[Callable, str, int]]
-
-metrics_registry: Metric = {}
-
 eps = 1e-6
 
+class Metric:
 
-def validate_datasets(gt_dataset: DetectionDataset, pred_dataset: DetectionDataset):
-    assert (
-        gt_dataset.classes == pred_dataset.classes
-    ), f"gt classes: {gt_dataset.classes}, pred classes: {pred_dataset.classes}"
-    assert gt_dataset.images.keys() == pred_dataset.images.keys()
+    @staticmethod
+    def evaluate_detections(self, gt_dets: Detections, pred_dets: Detections):
+        raise NotImplementedError()
+    @staticmethod
+    def evaluate_datasets(self, gt_dataset: DetectionDataset, pred_dataset: DetectionDataset):
+        raise NotImplementedError()
+    @staticmethod
+    def name()->str:
+        raise NotImplementedError()
+    @staticmethod
+    def direction()->int:
+        raise NotImplementedError()
+
+metrics_registry: Dict[str,Metric] = {}
+        
+class DetectionMetric(Metric):
+    @staticmethod
+    def evaluate_datasets(self, gt_dataset: DetectionDataset, pred_dataset: DetectionDataset):
+        DetectionMetric.validate_datasets(gt_dataset, pred_dataset)
+
+        running_metric = 0
+        running_count = 0
+
+        for img_name in gt_dataset.images:
+            gt_detections = gt_dataset.annotations[img_name]
+            pred_detections = pred_dataset.annotations[img_name]
+
+            metric = self.evaluate_detections(gt_detections, pred_detections)
+
+            running_metric += metric
+            running_count += 1
+        
+        return running_metric / (running_count + eps)
+
+    @staticmethod
+    def validate_datasets(gt_dataset: DetectionDataset, pred_dataset: DetectionDataset):
+        assert (
+            gt_dataset.classes == pred_dataset.classes
+        ), f"gt classes: {gt_dataset.classes}, pred classes: {pred_dataset.classes}"
+        assert gt_dataset.images.keys() == pred_dataset.images.keys()
+
+class DatasetMetric(Metric):
+    @staticmethod
+    def evaluate_detections(self, gt_dets: Detections, pred_dets: Detections):
+
+        if len(gt_dets) == 0:
+            return 0
+
+        max_class_id = np.concatenate([gt_dets.class_id, pred_dets.class_id]).max()
+
+        h,w = gt_dets.mask.shape[1:]
+
+        gt_dataset = DetectionDataset(
+            classes = list(range(max_class_id+1)),
+            images = {"test":np.zeros((h,w,3))},
+            annotations={"test":gt_dets}
+        )
+
+        pred_dataset = DetectionDataset(
+            classes = list(range(max_class_id+1)),
+            images = {"test":np.zeros((h,w,3))},
+            annotations={"test":pred_dets}
+        )
+
+        return self.evaluate_datasets(gt_dataset, pred_dataset)
 
 
-def iou(gt_dataset: DetectionDataset, pred_dataset: DetectionDataset) -> float:
-    validate_datasets(gt_dataset, pred_dataset)
+#
+#  IoU
+#
 
-    running_intersection = 0
-    running_union = 0
+class IoU(DatasetMetric):
+    @staticmethod
+    def name():
+        return "IoU"
+    @staticmethod
+    def direction():
+        return MetricDirection.HIGHER_IS_BETTER
+    @staticmethod
+    def evaluate_datasets(self, gt_dataset: DetectionDataset, pred_dataset: DetectionDataset):
+        DetectionMetric.validate_datasets(gt_dataset, pred_dataset)
 
-    for img_name in gt_dataset.images:
-        gt_detections = gt_dataset.annotations[img_name]
-        pred_detections = pred_dataset.annotations[img_name]
+        running_intersection = 0
+        running_union = 0
 
-        img = gt_dataset.images[img_name]
+        for img_name in gt_dataset.images:
+            gt_detections = gt_dataset.annotations[img_name]
+            pred_detections = pred_dataset.annotations[img_name]
 
-        gt_mask = get_combined_mask(img, gt_detections)
-        pred_mask = get_combined_mask(img, pred_detections)
+            if(len(gt_detections) == 0 and len(pred_detections) == 0):
+                continue
 
-        intersection = np.sum(gt_mask * pred_mask)
-        union = np.sum(np.logical_or(gt_mask, pred_mask))
+            img = gt_dataset.images[img_name]
 
-        running_intersection += intersection
-        running_union += union
+            gt_mask = get_combined_mask(img, gt_detections)
+            pred_mask = get_combined_mask(img, pred_detections)
 
-    return running_intersection / (running_union + eps)
+            intersection = np.sum(gt_mask * pred_mask)
+            union = np.sum(np.logical_or(gt_mask, pred_mask))
 
+            running_intersection += intersection
+            running_union += union
 
-metrics_registry["iou"] = (iou, "IoU", MetricDirection.HIGHER_IS_BETTER)
+        return running_intersection / (running_union + eps)
+
+metrics_registry["iou"] = IoU
 
 
 def get_combined_mask(img: np.ndarray, detections: Detections) -> np.ndarray:
@@ -61,6 +132,9 @@ def get_combined_mask(img: np.ndarray, detections: Detections) -> np.ndarray:
 
     return mask
 
+#
+# mAP
+#
 
 import os
 import sys
@@ -68,56 +142,65 @@ import sys
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 
-old_stdout = sys.stdout
+oneify_score = False
+
+class MaP(DatasetMetric):
+    last_coco_eval = None
+    old_stdout = None
 
 
-# Disable
-def blockPrint():
-    return
-    sys.stdout = open(os.devnull, "w")
+    @staticmethod
+    def name():
+        return "mAP"
 
+    @staticmethod
+    def direction():
+        return MetricDirection.HIGHER_IS_BETTER
 
-# Restore
-def enablePrint():
-    sys.stdout = old_stdout
+    @staticmethod
+    def evaluate_datasets(self, gt_dataset: DetectionDataset, pred_dataset: DetectionDataset):
+        DatasetMetric.validate_datasets(gt_dataset, pred_dataset)
 
+        gt_filename = "gt.json"
+        pred_filename = "pred.json"
 
-last_coco_eval = None
+        # don't save images for either--mAP only depends on the masks
+        gt_dataset.as_coco(annotations_path=gt_filename)
+        pred_dataset.as_coco(annotations_path=pred_filename)
 
+        MaP.blockPrint()
 
-# For now, save both as COCO format, then use pycocotoosl COCOeval
-def mAP(gt_dataset: DetectionDataset, pred_dataset: DetectionDataset) -> float:
-    validate_datasets(gt_dataset, pred_dataset)
+        gt_coco = COCO(gt_filename)
+        pred_coco = COCO(pred_filename)
 
-    gt_filename = "gt.json"
-    pred_filename = "pred.json"
+        if oneify_score:
+            for ann in pred_coco.anns.values():
+                ann["score"] = 1
 
-    # don't save images for either--mAP only depends on the masks
-    gt_dataset.as_coco(annotations_path=gt_filename)
-    pred_dataset.as_coco(annotations_path=pred_filename)
+        coco_eval = COCOeval(gt_coco, pred_coco, "segm")
+        coco_eval.evaluate()
+        coco_eval.accumulate()
 
-    blockPrint()
+        coco_eval.summarize()
 
-    gt_coco = COCO(gt_filename)
-    pred_coco = COCO(pred_filename)
+        MaP.enablePrint()
 
-    for ann in pred_coco.anns.values():
-        ann["score"] = 1
+        final_mAP = coco_eval.stats[0]
 
-    coco_eval = COCOeval(gt_coco, pred_coco, "segm")
-    coco_eval.evaluate()
-    coco_eval.accumulate()
+        MaP.last_coco_eval = coco_eval
 
-    coco_eval.summarize()
+        return final_mAP
+    
 
-    enablePrint()
+    # Disable
+    @classmethod
+    def blockPrint(cls):
+        cls.old_stdout = sys.stdout
+        sys.stdout = open(os.devnull, "w")
 
-    final_mAP = coco_eval.stats[0]
+    # Restore
+    @classmethod
+    def enablePrint(cls):
+        sys.stdout = cls.old_stdout
 
-    global last_coco_eval
-    last_coco_eval = coco_eval
-
-    return final_mAP
-
-
-metrics_registry["map"] = (mAP, "mAP", MetricDirection.HIGHER_IS_BETTER)
+metrics_registry["map"] = MaP

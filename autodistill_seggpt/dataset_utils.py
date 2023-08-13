@@ -95,7 +95,7 @@ from typing import List
 import numpy as np
 import supervision as sv
 
-from .few_shot_ontology import FewShotOntology
+from .few_shot_ontology import OldFewShotOntology
 
 
 # This acts like an oracle for a given FewShotOntology.
@@ -126,4 +126,11 @@ def extract_classes_from_dataset(
     classes = [old_dataset.classes[class_id] for class_id in class_ids]
     return sv.DetectionDataset(
         classes=classes, images=old_dataset.images, annotations=new_annotations
+    )
+
+def extract_images_from_dataset(dataset: DetectionDataset, images: List[str])->DetectionDataset:
+    return DetectionDataset(
+        classes=dataset.classes,
+        images={img_name:dataset.images[img_name] for img_name in images},
+        annotations={img_name:dataset.annotations[img_name] for img_name in images},
     )

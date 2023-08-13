@@ -13,7 +13,7 @@ from supervision.dataset.core import DetectionDataset
 # move the searching/etc. logic into find_best_examples.
 # Maybe also try to make nice/quick serialization for shareability.
 
-def default_model(ontology: FewShotOntology) -> DetectionBaseModel:
+def default_model(ontology: FewShotOntologySimple) -> DetectionBaseModel:
     from .seggpt import SegGPT
 
     return SegGPT(
@@ -21,15 +21,43 @@ def default_model(ontology: FewShotOntology) -> DetectionBaseModel:
         refine_detections=False, # disable this since we don't use SAM feature map caching (or MobileSAM) yet. So SAM slows us down big-time.
     )
 
+# the best set of images--this will be used to detect every class
 @dataclass
-class FewShotOntology(DetectionOntology):
+class FewShotOntologySimple(DetectionOntology):
+    def __init__(
+        self,
+        ref_dataset: DetectionDataset,
+        mapping: Dict[int, str], # class_id -> new_class_name
+    ):
+        self.ref_dataset = ref_dataset
+        self.mapping = mapping
+
+        self.reverse_mapping = {v: k for k, v in mapping.items()}
+        assert len(self.reverse_mapping) == len(self.mapping), "Mapping must be 1-to-1."
+
+    # DetectionOntology methods
+    def prompts(self) -> List[str]:
+        return list(self.mapping.keys())
+    
+    def classes(self) -> List[str]:
+        return list(self.mapping.values())
+
+    def promptToClass(self, prompt: str) -> str:
+        return self.mapping[prompt]
+
+    def classToPrompt(self, cls: str) -> str:
+        return self.reverse_mapping[cls]
+
+# the best set of images to use to detect each individual class
+@dataclass
+class OldFewShotOntology(DetectionOntology):
     def __init__(
         self,
         ref_dataset: DetectionDataset,
         # each tuple in the list has form:
         # ( (training_class_name, [reference_image_ids]), output_class_name )]))
         # i.e. ( ("1-climbing-holds",["demo-holds-1.jpg","demo-holds-2.jpg"]), "climbing-hold" )
-        ontology: List[Tuple[Tuple[str, List[str]], str]] = None,
+        example_names: List[Tuple[Tuple[str, List[str]], str]] = None,
     ):
         self.ref_dataset = ref_dataset
 
@@ -56,10 +84,10 @@ class FewShotOntology(DetectionOntology):
                 }
             )
 
-            from .find_best_examples import find_best_examples
+            from .find_examples.sample_old import sample_best_examples
 
-            best_examples = find_best_examples(ref_dataset, default_model)
-            ontology = FewShotOntology.examples_to_tuples(ontology, best_examples)
+            best_examples = sample_best_examples(ref_dataset, default_model)
+            ontology = OldFewShotOntology.examples_to_tuples(ontology, best_examples)
 
         self.ontology = ontology
         rich_ontology = self.enrich_ontology(ontology)
@@ -137,6 +165,7 @@ class FewShotOntology(DetectionOntology):
         ref_dataset: DetectionDataset,
         ontology: CaptionOntology,
         examples: Dict[str, List[str]],
-    ) -> FewShotOntology:
-        onto_tuples = FewShotOntology.examples_to_tuples(ontology, examples)
-        return FewShotOntology(ref_dataset, onto_tuples)
+    ) -> OldFewShotOntology:
+        onto_tuples = OldFewShotOntology.examples_to_tuples(ontology, examples)
+        return OldFewShotOntology(ref_dataset, onto_tuples)
+    

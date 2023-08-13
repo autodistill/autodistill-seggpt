@@ -63,7 +63,7 @@ from PIL import Image
 from seggpt_engine import run_one_image
 from seggpt_inference import prepare_model
 from segment_anything import SamPredictor
-from supervision import Detections
+from supervision import Detections,DetectionDataset
 from torch.nn import functional as F
 
 # Model/dataset parameters - don't need to be configurable
@@ -77,7 +77,7 @@ res, hres = 448, 448
 
 # SegGPT-specific utils
 from . import colors
-from .few_shot_ontology import FewShotOntology
+from .few_shot_ontology import FewShotOntologySimple
 from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitmasks
 from .sam_refine import load_SAM, refine_detections
 
@@ -91,7 +91,7 @@ class SegGPT(DetectionBaseModel):
 
     def __init__(
         self,
-        ontology: FewShotOntology,
+        ontology: FewShotOntologySimple,
         refine_detections: bool = True,
         sam_predictor=None,
     ):
@@ -111,7 +111,8 @@ class SegGPT(DetectionBaseModel):
 
         self.ref_imgs = {}
 
-    def preprocess(self, img: np.ndarray) -> np.ndarray:
+    @staticmethod
+    def preprocess(img: np.ndarray) -> np.ndarray:
         img = cv2.resize(img, dsize=(res, hres))
         img = img / 255.0
         img = img - imagenet_mean
@@ -120,7 +121,7 @@ class SegGPT(DetectionBaseModel):
 
     # convert an img + detections into an img + mask.
     # note: all the detections have the same class in the FewShotOntology.
-    def prepare_ref_img(self, img: np.ndarray, detections: Detections):
+    def prepare_ref_img(img: np.ndarray, detections: Detections):
         ih, iw, _ = img.shape
         og_img = img
 
@@ -149,12 +150,12 @@ class SegGPT(DetectionBaseModel):
 
             mask[det_mask] = curr_rgb
 
-        mask = self.preprocess(mask)
+        mask = SegGPT.preprocess(mask)
 
         return img, mask
 
     # Convert a list of reference images into a SegGPT-friendly batch.
-    def prepare_ref_imgs(
+    def old_prepare_ref_imgs(
         self, cls_name: str, refs: List[Tuple[np.ndarray, Detections]]
     ):
         if cls_name in self.ref_imgs:
@@ -165,8 +166,9 @@ class SegGPT(DetectionBaseModel):
         for ref_img, detections in refs:
             img, mask = self.prepare_ref_img(ref_img, detections)
 
-            img_min_area = detections.area.min()
-            min_area = min(min_area, img_min_area)
+            if len(detections.area) > 0:
+              img_min_area = detections.area.min()
+              min_area = min(min_area, img_min_area)
 
             imgs.append(img)
             masks.append(mask)
@@ -175,6 +177,27 @@ class SegGPT(DetectionBaseModel):
         ret = (imgs, masks, min_area)
         self.ref_imgs[cls_name] = ret
 
+        return ret
+    
+    @staticmethod
+    def prepare_ref_imgs(ref_dataset: DetectionDataset)->Tuple[np.ndarray,np.ndarray,float]:
+        imgs, masks = [], []
+        min_area_per_class = [inf for _ in ref_dataset.classes]
+        for img_name, detections in ref_dataset.annotations.items():
+            img = ref_dataset.images[img_name]
+            img, mask = SegGPT.prepare_ref_img(img, detections)
+
+            for cls_id in range(len(ref_dataset.classes)):
+                cls_detections = detections[detections.class_id == cls_id]
+                if len(cls_detections.area) > 0:
+                    img_min_area = cls_detections.area.min()
+                    min_area_per_class[cls_id] = min(min_area_per_class[cls_id], img_min_area)
+
+            imgs.append(img)
+            masks.append(mask)
+        imgs = np.stack(imgs, axis=0)
+        masks = np.stack(masks, axis=0)
+        ret = (imgs, masks, min_area_per_class)
         return ret
 
     @torch.no_grad()
@@ -193,52 +216,51 @@ class SegGPT(DetectionBaseModel):
 
         img = self.preprocess(input_image)
 
+        ref_imgs, ref_masks, min_ref_area_per_class = self.prepare_ref_imgs(self.ontology.ref_dataset)
+
         detections = []
-        for keyId, raw_ref_imgs in enumerate(self.ontology.rich_prompts()):
-            assert len(img.shape) == 3, f"img.shape: {img.shape}"
+        assert len(img.shape) == 3, f"img.shape: {img.shape}"
 
-            ref_imgs, ref_masks, min_ref_area = self.prepare_ref_imgs(
-                keyId, raw_ref_imgs
+        # convert ref_imgs from (N,H,W,C) to (N,2H,W,C)
+        img_repeated = np.repeat(img[np.newaxis, ...], len(ref_imgs), axis=0)
+
+        # SegGPT uses this weird format--it needs images/masks to be in format (N,2H,W,C)--where the first H rows are the reference image, and the next H rows are the input image.
+        imgs = np.concatenate((ref_imgs, img_repeated), axis=1)
+        masks = np.concatenate((ref_masks, ref_masks), axis=1)
+
+        torch.manual_seed(2)
+        output = run_one_image(imgs, masks, self.model, device)
+        output = (
+            F.interpolate(
+                output[None, ...].permute(0, 3, 1, 2),
+                size=[size[1], size[0]],
+                mode="nearest",
             )
+            .permute(0, 2, 3, 1)[0]
+            .numpy()
+        )
 
-            # convert ref_imgs from (N,H,W,C) to (N,2H,W,C)
-            img_repeated = np.repeat(img[np.newaxis, ...], len(ref_imgs), axis=0)
+        # We constrain all masks to follow a given color palette.
+        # This can help distinguish adjacent instances.
+        # But it also serves as a bitmask-ifier when we just set the palette to be white.
+        quant_output = quantize(output)
 
-            # SegGPT uses this weird format--it needs images/masks to be in format (N,2H,W,C)--where the first H rows are the reference image, and the next H rows are the input image.
-            imgs = np.concatenate((ref_imgs, img_repeated), axis=1)
-            masks = np.concatenate((ref_masks, ref_masks), axis=1)
+        to_bitmask_output = quant_output
+        to_bitmask_palette = colors.palette
 
-            torch.manual_seed(2)
-            output = run_one_image(imgs, masks, self.model, device)
-            output = (
-                F.interpolate(
-                    output[None, ...].permute(0, 3, 1, 2),
-                    size=[size[1], size[0]],
-                    mode="nearest",
-                )
-                .permute(0, 2, 3, 1)[0]
-                .numpy()
-            )
+        bitmasks,cls_ids = quantized_to_bitmasks(to_bitmask_output, to_bitmask_palette)
+        detections = bitmasks_to_detections(bitmasks, cls_ids)
 
-            # We constrain all masks to follow a given color palette.
-            # This can help distinguish adjacent instances.
-            # But it also serves as a bitmask-ifier when we just set the palette to be white.
-            quant_output = quantize(output)
+        filtered_detections = []
+        for cls_id in range(len(self.ontology.ref_dataset.classes)):
+            cls_detections = detections[detections.class_id == cls_id]
+            cls_min_area = min_ref_area_per_class[cls_id]
+            cls_filtered_detections = cls_detections[cls_detections.area > cls_min_area * 0.75]
+            filtered_detections.append(cls_filtered_detections)
 
-            to_bitmask_output = quant_output
-            to_bitmask_palette = colors.palette
+        detections = Detections.merge(filtered_detections)
 
-            bitmasks = quantized_to_bitmasks(to_bitmask_output, to_bitmask_palette)
-            new_detections = bitmasks_to_detections(bitmasks, keyId)
-
-            new_detections = new_detections[new_detections.area > min_ref_area * 0.75]
-
-            if len(new_detections) > 0:
-                detections.append(new_detections)
-
-        # filter <100px detections
-        detections = Detections.merge(detections)
-
+        # filter detections with no valid polygons
         if len(detections) > 0:
             detections = detections[has_polygons(detections.mask)]
             if self.refine_detections:
