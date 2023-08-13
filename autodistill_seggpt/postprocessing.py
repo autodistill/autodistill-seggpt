@@ -30,8 +30,6 @@ def quantize(img):
 
 
 from scipy.ndimage.measurements import label
-
-
 def quantized_to_bitmasks(img, palette):
     # get "components" of each color
     filtered_components = []
@@ -54,8 +52,6 @@ def quantized_to_bitmasks(img, palette):
 
 
 import supervision as sv
-
-
 def bitmasks_to_detections(bitmasks, cls_ids):
     class_id = np.asarray(cls_ids).astype("int64")
     detections = [
@@ -63,8 +59,8 @@ def bitmasks_to_detections(bitmasks, cls_ids):
             xyxy=sv.detection.utils.mask_to_xyxy(bitmask[None, ...]),
             mask=bitmask[None, ...] > 0,
             confidence=np.ndarray([1]),
-            class_id=class_id,
+            class_id=class_id[None,i],
         )
-        for bitmask in bitmasks
+        for i,bitmask in enumerate(bitmasks)
     ]
     return sv.Detections.merge(detections)

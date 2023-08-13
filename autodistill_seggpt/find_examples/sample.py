@@ -15,7 +15,7 @@ from ..dataset_utils import (
     shrink_dataset_to_size,
 )
 from ..few_shot_ontology import FewShotOntologySimple
-from ..metrics import Metric, metrics_registry, metric_on_detections
+from ..metrics import Metric, metrics_registry
 
 # TODO: make multiple eval metrics. A metric could fit the interface get_score(gt_dataset,pred_dataset)->float,str.
 # The float is the score, the str is a human-readable description of the score (plus some extra metadata like mAP-large, etc.)
@@ -47,7 +47,7 @@ def sample_ontology(
     valid_dataset = shrink_dataset_to_size(ref_dataset, max_test_imgs)
 
     num_examples = min(num_examples, len(positive_examples))
-    num_combos = perm(len(positive_examples), num_examples)
+    num_combos = math.comb(len(positive_examples), num_examples)
 
     num_iters = min(num_combos, num_trials)
 
@@ -71,18 +71,19 @@ def sample_ontology(
         ontology = FewShotOntologySimple(sub_dataset)
         model = make_model(ontology)  # model must take only an Ontology as a parameter
         pred_dataset = label_dataset(valid_dataset, model)
-        score = metric(valid_dataset, pred_dataset).tolist()
+        score = metric.evaluate_datasets(valid_dataset, pred_dataset).tolist()
 
         ontologies_scores.append((ontology, score))
-        max_or_min = max if metric.direction == 1 else min
+        max_or_min = max if metric.direction() == 1 else min
         max_score = max_or_min(max_score, score)
-        combo_pbar.set_description(f"Best/latest {metric.name}: {round(max_score,2)}/{round(score,2)}")
+        combo_pbar.set_description(f"Best/latest {metric.name()}: {round(max_score,2)}/{round(score,2)}")
 
     best_ontology, best_score = max(ontologies_scores, key=lambda x: x[1])
 
     return best_ontology
 
 from combinadics import Combination
+from ..combinadics import int_to_mac
 
 # use the Macaulay integer representation of combinations to choose a subset of images
 # We use this since unique integers map to unique combinations - by taking a random sample of ints, we can get a non-repeating set of Ontologies.
@@ -91,17 +92,9 @@ def combo_hash_to_choices(
 ) -> List[any]:
     assert len(candidates) >= num_choices, "Not enough candidates to choose from."
 
-    combination = Combination(len(candidates), num_choices)
-    idxes = combination.Element(hash).data
+    idxes = int_to_mac(hash, num_choices)
 
     chosen = []
     for idx in idxes:
         chosen.append(candidates[idx])
     return chosen
-
-import math
-def perm(n, k):
-    return int(math.factorial(n) / math.factorial(n - k))
-
-def choose(n, k):
-    return int(math.factorial(n) / (math.factorial(k) * math.factorial(n - k)))

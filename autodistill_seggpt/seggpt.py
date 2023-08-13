@@ -83,6 +83,7 @@ from .sam_refine import load_SAM, refine_detections
 
 use_colorings = colors.preset != "white"
 
+semantic = colors.seg_type == "semantic"
 
 @dataclass
 class SegGPT(DetectionBaseModel):
@@ -126,13 +127,17 @@ class SegGPT(DetectionBaseModel):
         og_img = img
 
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = self.preprocess(img)
+        img = SegGPT.preprocess(img)
 
         # draw masks onto image
         mask = np.zeros_like(og_img)
         for detection in detections:
-            curr_rgb = colors.next_color()
-            det_box, det_mask, *_ = detection
+            _, det_mask, _, det_class_id, *_ = detection
+
+            if semantic:
+                curr_rgb = colors.next_color(det_class_id.item())
+            else:
+                curr_rgb = colors.next_color()
 
             mh, mw = det_mask.shape
 

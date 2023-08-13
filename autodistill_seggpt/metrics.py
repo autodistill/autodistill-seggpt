@@ -50,7 +50,7 @@ class DetectionMetric(Metric):
     @staticmethod
     def validate_datasets(gt_dataset: DetectionDataset, pred_dataset: DetectionDataset):
         assert (
-            gt_dataset.classes == pred_dataset.classes
+            len(gt_dataset.classes) == len(pred_dataset.classes)
         ), f"gt classes: {gt_dataset.classes}, pred classes: {pred_dataset.classes}"
         assert gt_dataset.images.keys() == pred_dataset.images.keys()
 
@@ -92,7 +92,7 @@ class IoU(DatasetMetric):
     def direction():
         return MetricDirection.HIGHER_IS_BETTER
     @staticmethod
-    def evaluate_datasets(self, gt_dataset: DetectionDataset, pred_dataset: DetectionDataset):
+    def evaluate_datasets(gt_dataset: DetectionDataset, pred_dataset: DetectionDataset):
         DetectionMetric.validate_datasets(gt_dataset, pred_dataset)
 
         running_intersection = 0
@@ -158,7 +158,7 @@ class MaP(DatasetMetric):
         return MetricDirection.HIGHER_IS_BETTER
 
     @staticmethod
-    def evaluate_datasets(self, gt_dataset: DetectionDataset, pred_dataset: DetectionDataset):
+    def evaluate_datasets(gt_dataset: DetectionDataset, pred_dataset: DetectionDataset):
         DatasetMetric.validate_datasets(gt_dataset, pred_dataset)
 
         gt_filename = "gt.json"

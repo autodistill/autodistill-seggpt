@@ -27,9 +27,12 @@ class FewShotOntologySimple(DetectionOntology):
     def __init__(
         self,
         ref_dataset: DetectionDataset,
-        mapping: Dict[int, str], # class_id -> new_class_name
+        mapping: Dict[int, str] = None, # class_id -> new_class_name
     ):
         self.ref_dataset = ref_dataset
+
+        if mapping is None:
+            mapping = {i: f"{i}-{cls_name}" for i, cls_name in enumerate(ref_dataset.classes)}
         self.mapping = mapping
 
         self.reverse_mapping = {v: k for k, v in mapping.items()}

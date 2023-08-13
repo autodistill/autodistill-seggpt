@@ -51,7 +51,7 @@ def grow_ontology(
 
             # find worst-performing image of a few
 
-            worst_score = math.inf if metric.direction == MetricDirection.LOWER_IS_BETTER else -math.inf
+            worst_score = math.inf if metric.direction() == MetricDirection.LOWER_IS_BETTER else -math.inf
             worst_img = None
 
             running_score = 0
@@ -66,7 +66,7 @@ def grow_ontology(
                 running_score += score
                 running_count += 1
 
-                if (metric.direction == MetricDirection.LOWER_IS_BETTER and score < worst_score) or (metric.direction == MetricDirection.HIGHER_IS_BETTER and score > worst_score):
+                if (metric.direction() == MetricDirection.LOWER_IS_BETTER and score < worst_score) or (metric.direction == MetricDirection.HIGHER_IS_BETTER and score > worst_score):
                     worst_score = score
                     worst_img = img
             
