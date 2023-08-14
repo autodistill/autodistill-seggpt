@@ -128,9 +128,60 @@ def extract_classes_from_dataset(
         classes=classes, images=old_dataset.images, annotations=new_annotations
     )
 
+def merge_datasets(
+    old_dataset: DetectionDataset, new_dataset: DetectionDataset
+)-> DetectionDataset:
+
+    if old_dataset.classes != new_dataset.classes:
+        new_classes = [*old_dataset.classes,*new_dataset.classes]
+        # switch class_ids in new_dataset to match old_dataset
+        new_annotations = {}
+        for img_name, detections in new_dataset.annotations.items():
+            new_detections = sv.Detections.merge([detections])
+            new_detections.class_id += len(old_dataset.classes)
+            new_annotations[img_name] = new_detections
+    else:
+        new_classes = old_dataset.classes
+        new_annotations = new_dataset.annotations
+    
+    # now merge annotations for matching images
+
+    old_annotations = {**old_dataset.annotations}
+
+    for img_name, detections in new_annotations.items():
+        if img_name in old_annotations:
+            old_annotations[img_name] = sv.Detections.merge([old_annotations[img_name],detections])
+        else:
+            old_annotations[img_name] = detections
+    
+    return DetectionDataset(
+        classes=new_classes,
+        images={**old_dataset.images,**new_dataset.images},
+        annotations=old_annotations,
+    )
+
 def extract_images_from_dataset(dataset: DetectionDataset, images: List[str])->DetectionDataset:
     return DetectionDataset(
         classes=dataset.classes,
         images={img_name:dataset.images[img_name] for img_name in images},
         annotations={img_name:dataset.annotations[img_name] for img_name in images},
     )
+
+import matplotlib.pyplot as plt
+def viz_dataset(filename:str,dataset:DetectionDataset):
+    grid_dims=(4,4)
+    size=(16,16)
+
+    img_names = list(dataset.images.keys())
+
+    sampled_img_names = sample(img_names, min(len(img_names),grid_dims[0]*grid_dims[1]))
+
+    sampled_imgs = [dataset.images[img_name] for img_name in sampled_img_names]
+
+    annotator = sv.MaskAnnotator()
+    annotated_imgs = [annotator.annotate(scene=img,detections=dataset.annotations[img_name]) for img_name,img in zip(sampled_img_names,sampled_imgs)]
+
+    # plt.gcf().set_visible(False)
+    sv.utils.notebook.plot_images_grid(annotated_imgs,grid_size=grid_dims,size=size)
+    plt.savefig(filename)
+    # plt.close()

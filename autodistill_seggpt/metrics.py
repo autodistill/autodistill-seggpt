@@ -55,8 +55,8 @@ class DetectionMetric(Metric):
         assert gt_dataset.images.keys() == pred_dataset.images.keys()
 
 class DatasetMetric(Metric):
-    @staticmethod
-    def evaluate_detections(self, gt_dets: Detections, pred_dets: Detections):
+    @classmethod
+    def evaluate_detections(cls, gt_dets: Detections, pred_dets: Detections):
 
         if len(gt_dets) == 0:
             return 0
@@ -77,7 +77,7 @@ class DatasetMetric(Metric):
             annotations={"test":pred_dets}
         )
 
-        return self.evaluate_datasets(gt_dataset, pred_dataset)
+        return cls.evaluate_datasets(gt_dataset, pred_dataset)
 
 
 #
@@ -131,6 +131,44 @@ def get_combined_mask(img: np.ndarray, detections: Detections) -> np.ndarray:
     mask = np.clip(mask, 0, 1)
 
     return mask
+
+# mIoU
+
+from .dataset_utils import extract_classes_from_dataset
+class mIoU(DatasetMetric):
+    @staticmethod
+    def name():
+        return "MIoU"
+    @staticmethod
+    def direction():
+        return MetricDirection.HIGHER_IS_BETTER
+    @staticmethod
+    def evaluate_datasets(gt_dataset: DetectionDataset, pred_dataset: DetectionDataset):
+        # split dataset into 1 part per class
+
+        ious = []
+        for cls_id,cls_name in enumerate(gt_dataset.classes):
+            sub_gt_dataset = extract_classes_from_dataset(gt_dataset, [cls_id])
+            sub_pred_dataset = extract_classes_from_dataset(pred_dataset, [cls_id])
+
+            # count the # of instances
+            num_instances = sum([len(dets) for dets in sub_gt_dataset.annotations.values()])
+
+            if num_instances == 0:
+                continue
+
+            # evaluate IoU on each part
+            iou = IoU.evaluate_datasets(sub_gt_dataset, sub_pred_dataset)
+            ious.append(iou)
+
+            print(f"mIoU for class {cls_name}: {iou}")
+        
+        if len(ious) == 0:
+            raise ValueError("No instances in dataset")
+        
+        return sum(ious)/len(ious)
+
+metrics_registry["miou"] = mIoU
 
 #
 # mAP

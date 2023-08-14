@@ -10,17 +10,19 @@ from supervision.dataset.core import DetectionDataset
 from tqdm import tqdm
 
 from ..dataset_utils import (
-    extract_classes_from_dataset,
     label_dataset,
     shrink_dataset_to_size,
+    viz_dataset,
 )
 from ..few_shot_ontology import FewShotOntologySimple
 from ..metrics import Metric, metrics_registry
+import os
 
 # TODO: make multiple eval metrics. A metric could fit the interface get_score(gt_dataset,pred_dataset)->float,str.
 # The float is the score, the str is a human-readable description of the score (plus some extra metadata like mAP-large, etc.)
 # Metrics could include: mask AP, mask IoU, box AP, etc.
 from random import choice
+import json
 def sample_ontology(
     # general params
     ref_dataset: DetectionDataset,
@@ -68,10 +70,23 @@ def sample_ontology(
             images={img_name: ref_dataset.images[img_name] for img_name in image_choices},
             annotations={img_name: ref_dataset.annotations[img_name] for img_name in image_choices},
         )
+
+        os.makedirs(f"samples/{combo_hash}",exist_ok=True)
+        viz_dataset(f"samples/{combo_hash}/train.png",sub_dataset)
         ontology = FewShotOntologySimple(sub_dataset)
         model = make_model(ontology)  # model must take only an Ontology as a parameter
         pred_dataset = label_dataset(valid_dataset, model)
+        viz_dataset(f"samples/{combo_hash}/infer.png",pred_dataset)
         score = metric.evaluate_datasets(valid_dataset, pred_dataset).tolist()
+
+        metadata = {
+            "score": score,
+            "metric": metric.name(),
+            "images": image_choices,
+        }
+
+        with open(f"samples/{combo_hash}/metadata.json","w") as f:
+            json.dump(metadata,f)
 
         ontologies_scores.append((ontology, score))
         max_or_min = max if metric.direction() == 1 else min

@@ -13,6 +13,7 @@ def check_dependencies():
     autodistill_dir = os.path.expanduser("~/.cache/autodistill")
     os.makedirs(autodistill_dir, exist_ok=True)
 
+    og_dir = os.getcwd()
     os.chdir(autodistill_dir)
 
     try:
@@ -44,6 +45,8 @@ def check_dependencies():
 
         print("Downloading SegGPT weights...")
         subprocess.run(["wget", model_url, "-O", ckpt_path])
+    
+    os.chdir(og_dir)
 
 
 check_dependencies()
@@ -77,13 +80,12 @@ res, hres = 448, 448
 
 # SegGPT-specific utils
 from . import colors
+from .colors import color
 from .few_shot_ontology import FewShotOntologySimple
 from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitmasks
 from .sam_refine import load_SAM, refine_detections
 
 use_colorings = colors.preset != "white"
-
-semantic = colors.seg_type == "semantic"
 
 @dataclass
 class SegGPT(DetectionBaseModel):
@@ -112,6 +114,8 @@ class SegGPT(DetectionBaseModel):
 
         self.ref_imgs = {}
 
+        self.annotator = sv.MaskAnnotator()
+
     @staticmethod
     def preprocess(img: np.ndarray) -> np.ndarray:
         img = cv2.resize(img, dsize=(res, hres))
@@ -134,10 +138,7 @@ class SegGPT(DetectionBaseModel):
         for detection in detections:
             _, det_mask, _, det_class_id, *_ = detection
 
-            if semantic:
-                curr_rgb = colors.next_color(det_class_id.item())
-            else:
-                curr_rgb = colors.next_color()
+            curr_rgb = color.next_color(det_class_id.item())
 
             mh, mw = det_mask.shape
 
@@ -154,6 +155,8 @@ class SegGPT(DetectionBaseModel):
             assert det_mask.max() <= 1, "mask values should be in [0,1]"
 
             mask[det_mask] = curr_rgb
+        
+        cv2.imwrite("mask.png",mask)
 
         mask = SegGPT.preprocess(mask)
 
@@ -251,20 +254,24 @@ class SegGPT(DetectionBaseModel):
         quant_output = quantize(output)
 
         to_bitmask_output = quant_output
-        to_bitmask_palette = colors.palette
+        to_bitmask_palette = color.palette()
 
         bitmasks,cls_ids = quantized_to_bitmasks(to_bitmask_output, to_bitmask_palette)
         detections = bitmasks_to_detections(bitmasks, cls_ids)
 
-        filtered_detections = []
-        for cls_id in range(len(self.ontology.ref_dataset.classes)):
-            cls_detections = detections[detections.class_id == cls_id]
-            cls_min_area = min_ref_area_per_class[cls_id]
-            cls_filtered_detections = cls_detections[cls_detections.area > cls_min_area * 0.75]
-            filtered_detections.append(cls_filtered_detections)
+        cv2.imwrite("raw_ann.png",self.annotator.annotate(scene=input_image, detections=detections))
 
-        detections = Detections.merge(filtered_detections)
+        filter_rel = False
+        if filter_rel:
+            filtered_detections = []
+            for cls_id in range(len(self.ontology.ref_dataset.classes)):
+                cls_detections = detections[detections.class_id == cls_id]
+                cls_min_area = min_ref_area_per_class[cls_id]
+                cls_filtered_detections = cls_detections[cls_detections.area > cls_min_area * 0.75]
+                filtered_detections.append(cls_filtered_detections)
 
+            detections = Detections.merge(filtered_detections)
+        
         # filter detections with no valid polygons
         if len(detections) > 0:
             detections = detections[has_polygons(detections.mask)]
@@ -272,6 +279,14 @@ class SegGPT(DetectionBaseModel):
                 detections = refine_detections(
                     input_image, detections, self.sam_predictor
                 )
+        
+        cv2.imwrite("refined_ann.png",self.annotator.annotate(scene=input_image, detections=detections))
+        
+        if len(detections) > 0:
+            detections = detections[detections.area > 100]
+
+        cv2.imwrite("filtered_ann.png",self.annotator.annotate(scene=input_image, detections=detections))
+        
 
         return detections
 
@@ -279,7 +294,7 @@ class SegGPT(DetectionBaseModel):
     # We share these models globally across all SegGPT instances, since we end up making lots of SegGPT instances during find_best_examples.
     def load_models(self, sam_predictor):
         if SegGPT.model is None:
-            SegGPT.model = prepare_model(ckpt_path, model, colors.seg_type).to(device)
+            SegGPT.model = prepare_model(ckpt_path, model, color.type()).to(device)
         self.model = SegGPT.model
 
         # We load the SAM predictor iff it's a) needed and b) not already loaded.

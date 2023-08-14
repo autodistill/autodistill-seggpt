@@ -78,7 +78,7 @@ def refine_detections(
         assert len(detections) == 0, f"len(detections): {len(detections)}"
         # get img shape
         h, w = img.shape[:2]
-        detections.mask = np.zeros_like((0, h, w))
+        detections.mask = np.zeros((0, h, w))
     return detections
 
 

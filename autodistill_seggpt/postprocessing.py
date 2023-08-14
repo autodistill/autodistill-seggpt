@@ -1,19 +1,21 @@
 import numpy as np
 
-from .colors import palette
+from .colors import color
 
 eps = 1e-10
 
+import cv2
 
 def quantize(img):
+    cv2.imwrite("test.png",img)
     # quantize image to palette
     if not isinstance(img, np.ndarray):
         img = np.asarray(img)
 
-    cosine = np.sum(img[..., None, :] * palette[None, None, ...], axis=-1)
+    cosine = np.sum(img[..., None, :] * color.palette()[None, None, ...], axis=-1)
     cosine = cosine / (
         np.linalg.norm(img, axis=-1, keepdims=True)
-        * np.linalg.norm(palette, axis=-1)[None, None, :]
+        * np.linalg.norm(color.palette(), axis=-1)[None, None, :]
         + eps
     )
 
@@ -21,9 +23,9 @@ def quantize(img):
 
     # set black pixels as any pixel that's too close to black
     black_dist = np.linalg.norm(img, axis=-1)
-    idx[black_dist < 40] = len(palette)
+    idx[black_dist < 40] = len(color.palette())
 
-    black_palette = np.concatenate([palette, [[0, 0, 0]]], axis=0)
+    black_palette = np.concatenate([color.palette(), [[0, 0, 0]]], axis=0)
 
     img = black_palette[idx]
     return img.astype("uint8")
