@@ -93,7 +93,7 @@ from .colors import Coloring
 from .few_shot_ontology import FewShotOntology,SeparatedFewShotOntology
 from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitmasks
 from .sam_refine import load_SAM, refine_detections
-from .dataset_utils import extract_classes_from_dataset
+from .dataset_utils import extract_classes_from_detections
 
 @dataclass
 class SegGPT(DetectionBaseModel):
@@ -239,7 +239,7 @@ class SegGPT(DetectionBaseModel):
             detections = self.predict_simple(input, self.ontology.ref_dataset)
         
         # now map the real, original class_ids to the class_ids in the ontology
-        detections = extract_classes_from_dataset(detections, self.ontology.prompts())
+        detections = extract_classes_from_detections(detections, self.ontology.prompts())
         return detections
     
     def predict_simple(
