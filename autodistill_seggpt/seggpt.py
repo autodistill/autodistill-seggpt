@@ -95,8 +95,6 @@ from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitma
 from .sam_refine import load_SAM, refine_detections
 from .dataset_utils import extract_classes_from_dataset
 
-use_colorings = colors.preset != "white"
-
 @dataclass
 class SegGPT(DetectionBaseModel):
     sam_predictor: Union[None, SamPredictor] = None
@@ -138,7 +136,7 @@ class SegGPT(DetectionBaseModel):
 
     # convert an img + detections into an img + mask.
     # note: all the detections have the same class in the FewShotOntology.
-    def prepare_ref_img(img: np.ndarray, detections: Detections):
+    def prepare_ref_img(img: np.ndarray, detections: Detections,coloring:Coloring):
         ih, iw, _ = img.shape
         og_img = img
 
@@ -150,7 +148,7 @@ class SegGPT(DetectionBaseModel):
         for detection in detections:
             _, det_mask, _, det_class_id, *_ = detection
 
-            curr_rgb = color.next_color(det_class_id.item())
+            curr_rgb = coloring.next_color(det_class_id.item())
 
             mh, mw = det_mask.shape
 
@@ -199,13 +197,12 @@ class SegGPT(DetectionBaseModel):
 
         return ret
     
-    @staticmethod
-    def prepare_ref_imgs(ref_dataset: DetectionDataset)->Tuple[np.ndarray,np.ndarray,float]:
+    def prepare_ref_imgs(self,ref_dataset: DetectionDataset)->Tuple[np.ndarray,np.ndarray,float]:
         imgs, masks = [], []
         min_area_per_class = [inf for _ in ref_dataset.classes]
         for img_name, detections in ref_dataset.annotations.items():
             img = ref_dataset.images[img_name]
-            img, mask = SegGPT.prepare_ref_img(img, detections)
+            img, mask = SegGPT.prepare_ref_img(img, detections, coloring=self.get_coloring())
 
             for cls_id in range(len(ref_dataset.classes)):
                 cls_detections = detections[detections.class_id == cls_id]
