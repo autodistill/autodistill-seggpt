@@ -89,7 +89,7 @@ res, hres = 448, 448
 
 # SegGPT-specific utils
 from . import colors
-from .colors import Color
+from .colors import Coloring
 from .few_shot_ontology import FewShotOntology,SeparatedFewShotOntology
 from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitmasks
 from .sam_refine import load_SAM, refine_detections
@@ -220,32 +220,38 @@ class SegGPT(DetectionBaseModel):
         ret = (imgs, masks, min_area_per_class)
         return ret
     
+    def get_coloring(self)->Coloring:
+        if isinstance(self.ontology,SeparatedFewShotOntology):
+            return colors.instance
+        else:
+            return colors.semantic
+    
     @torch.no_grad()
     def predict(self, input: Union[str, np.ndarray], _confidence: int = 0.5):
         if isinstance(self.ontology,SeparatedFewShotOntology):
             combined_detections = []
             for cls_id in self.ontology.prompts():
                 sub_dataset = self.ontology.ref_datasets[cls_id]
-                cls_dets = self.predict_simple(input,sub_dataset,color=colors.instance)
+                cls_dets = self.predict_simple(input,sub_dataset)
                 if len(cls_dets) > 0:
                     cls_dets.class_id = np.ones_like(cls_dets.class_id) * cls_id
                 combined_detections.append(cls_dets)
             
             detections = sv.Detections.merge(combined_detections)
         else:
-            detections = self.predict_simple(input, self.ontology.ref_dataset,color=colors.semantic)
+            detections = self.predict_simple(input, self.ontology.ref_dataset)
         
         # now map the real, original class_ids to the class_ids in the ontology
         detections = extract_classes_from_dataset(detections, self.ontology.prompts())
-
         return detections
     
     def predict_simple(
         self,
         input: Union[str, np.ndarray],
         ref_dataset: DetectionDataset,
-        color: Color
     ) -> sv.Detections:
+        coloring = self.get_coloring()
+
         if type(input) == str:
             image = Image.open(input).convert("RGB")
         else:
@@ -283,9 +289,9 @@ class SegGPT(DetectionBaseModel):
         # We constrain all masks to follow a given color palette.
         # This can help distinguish adjacent instances.
         # But it also serves as a bitmask-ifier when we just set the palette to be white.
-        quant_output = quantize(output,color)
+        quant_output = quantize(output,coloring)
 
-        bitmasks,cls_ids = quantized_to_bitmasks(quant_output, color)
+        bitmasks,cls_ids = quantized_to_bitmasks(quant_output, coloring)
         detections = bitmasks_to_detections(bitmasks, cls_ids)
 
         cv2.imwrite("raw_ann.png",self.annotator.annotate(scene=input_image, detections=detections))
@@ -323,7 +329,7 @@ class SegGPT(DetectionBaseModel):
     # We share these models globally across all SegGPT instances, since we end up making lots of SegGPT instances during find_best_examples.
     def load_models(self, sam_predictor):
         if SegGPT.model is None:
-            seg_type = color.type()
+            seg_type = self.get_coloring().type()
             SegGPT.model = prepare_model(ckpt_path, model, seg_type).to(device)
         self.model = SegGPT.model
 
@@ -337,8 +343,6 @@ class SegGPT(DetectionBaseModel):
 
 
 from supervision.dataset.utils import approximate_mask_with_polygons
-
-
 def has_polygons(masks: np.ndarray) -> np.ndarray:
     n, h, w = masks.shape
 

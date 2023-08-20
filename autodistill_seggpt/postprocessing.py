@@ -4,16 +4,16 @@ eps = 1e-10
 
 import cv2
 
-def quantize(img,color):
+def quantize(img,coloring):
     cv2.imwrite("test.png",img)
     # quantize image to palette
     if not isinstance(img, np.ndarray):
         img = np.asarray(img)
 
-    cosine = np.sum(img[..., None, :] * color.palette()[None, None, ...], axis=-1)
+    cosine = np.sum(img[..., None, :] * coloring.palette()[None, None, ...], axis=-1)
     cosine = cosine / (
         np.linalg.norm(img, axis=-1, keepdims=True)
-        * np.linalg.norm(color.palette(), axis=-1)[None, None, :]
+        * np.linalg.norm(coloring.palette(), axis=-1)[None, None, :]
         + eps
     )
 
@@ -21,23 +21,23 @@ def quantize(img,color):
 
     # set black pixels as any pixel that's too close to black
     black_dist = np.linalg.norm(img, axis=-1)
-    idx[black_dist < 40] = len(color.palette())
+    idx[black_dist < 40] = len(coloring.palette())
 
-    black_palette = np.concatenate([color.palette(), [[0, 0, 0]]], axis=0)
+    black_palette = np.concatenate([coloring.palette(), [[0, 0, 0]]], axis=0)
 
     img = black_palette[idx]
     return img.astype("uint8")
 
 
 from scipy.ndimage.measurements import label
-def quantized_to_bitmasks(img, color):
-    palette = color.palette()
+def quantized_to_bitmasks(img, coloring):
+    palette = coloring.palette()
     # get "components" of each color
     filtered_components = []
     filtered_cls_ids = []
     for color_idx in range(palette.shape[0]):
-        color = palette[color_idx]
-        matching_pixels = np.all(img == color, axis=-1)
+        coloring = palette[color_idx]
+        matching_pixels = np.all(img == coloring, axis=-1)
         # now make components
         componentized, num_components = label(matching_pixels)
 
