@@ -28,10 +28,11 @@ setuptools.setup(
         "supervision>=0.12.0",
         "pycocotools",
         "timm",
-        "fairscale"
+        "fairscale",
+        "detectron2-layers"
     ],
     dependency_links=[
-        "git+https://github.com/facebookresearch/detectron2.git"
+        # "git+https://github.com/facebookresearch/detectron2.git"
     ],
     packages=find_packages(exclude=("tests",)),
     extras_require={

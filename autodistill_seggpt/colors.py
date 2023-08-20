@@ -34,7 +34,7 @@ class InstanceColoring(Coloring):
         return "instance"
     @classmethod
     def next_color(cls,class_id:int):
-        return cls._next_color(cls)
+        return cls._next_color()
     @classmethod
     def _next_color(cls):
         raise NotImplementedError

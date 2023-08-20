@@ -9,6 +9,7 @@ import sys
 
 
 def check_dependencies():
+
     # Create the ~/.cache/autodistill directory if it doesn't exist
     autodistill_dir = os.path.expanduser("~/.cache/autodistill")
     os.makedirs(autodistill_dir, exist_ok=True)
@@ -16,19 +17,19 @@ def check_dependencies():
     og_dir = os.getcwd()
     os.chdir(autodistill_dir)
 
-    try:
-        import detectron2
-    except ImportError:
-        print("Installing detectron2...")
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "git+https://github.com/facebookresearch/detectron2.git",
-            ]
-        )
+    # try:
+    #     import detectron2
+    # except ImportError:
+    #     print("Installing detectron2...")
+    #     subprocess.run(
+    #         [
+    #             sys.executable,
+    #             "-m",
+    #             "pip",
+    #             "install",
+    #             "git+https://github.com/facebookresearch/detectron2.git",
+    #         ]
+    #     )
 
     # Check if SegGPT is installed
     seggpt_path = os.path.join(autodistill_dir, "Painter", "SegGPT", "SegGPT_inference")
@@ -40,6 +41,14 @@ def check_dependencies():
     if not os.path.isdir(seggpt_path):
         print("Installing SegGPT...")
         subprocess.run(["git", "clone", "https://github.com/baaivision/Painter.git"])
+
+        # replace "detectron2.layers" in Painter/SegGPT/SegGPT_inference/models_seggpt.py with "detectron2_layers"
+        models_seggpt_path = os.path.join(seggpt_path, "models_seggpt.py")
+        with open(models_seggpt_path, "r") as f:
+            contents = f.read()
+        contents = contents.replace("detectron2.layers", "detectron2_layers")
+        with open(models_seggpt_path, "w") as f:
+            f.write(contents)
 
         os.makedirs(models_dir, exist_ok=True)
 
@@ -294,7 +303,8 @@ class SegGPT(DetectionBaseModel):
     # We share these models globally across all SegGPT instances, since we end up making lots of SegGPT instances during find_best_examples.
     def load_models(self, sam_predictor):
         if SegGPT.model is None:
-            SegGPT.model = prepare_model(ckpt_path, model, color.type()).to(device)
+            seg_type = color.type()
+            SegGPT.model = prepare_model(ckpt_path, model, seg_type).to(device)
         self.model = SegGPT.model
 
         # We load the SAM predictor iff it's a) needed and b) not already loaded.

@@ -76,8 +76,8 @@ def shrink_dataset_to_size(
         # copy dataset
         return DetectionDataset(
             classes=dataset.classes,
-            images={*dataset.images},
-            annotations={*dataset.annotations},
+            images={**dataset.images},
+            annotations={**dataset.annotations},
         )
 
     imgs = sample(imgs, max_imgs)
@@ -129,7 +129,7 @@ def extract_classes_from_dataset(
     )
 
 def merge_datasets(
-    old_dataset: DetectionDataset, new_dataset: DetectionDataset
+    old_dataset: DetectionDataset, new_dataset: DetectionDataset,overwrite=False
 )-> DetectionDataset:
 
     if old_dataset.classes != new_dataset.classes:
@@ -149,7 +149,7 @@ def merge_datasets(
     old_annotations = {**old_dataset.annotations}
 
     for img_name, detections in new_annotations.items():
-        if img_name in old_annotations:
+        if img_name in old_annotations and not overwrite:
             old_annotations[img_name] = sv.Detections.merge([old_annotations[img_name],detections])
         else:
             old_annotations[img_name] = detections
@@ -159,6 +159,12 @@ def merge_datasets(
         images={**old_dataset.images,**new_dataset.images},
         annotations=old_annotations,
     )
+
+def merge_many_datasets(datasets: List[DetectionDataset], overwrite=True):
+    merged_dataset = DetectionDataset(classes=[],images={},annotations={})
+    for dataset in datasets:
+        merged_dataset = merge_datasets(merged_dataset,dataset,overwrite=overwrite)
+    return merged_dataset
 
 def extract_images_from_dataset(dataset: DetectionDataset, images: List[str])->DetectionDataset:
     return DetectionDataset(
