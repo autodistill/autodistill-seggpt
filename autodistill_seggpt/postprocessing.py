@@ -1,12 +1,10 @@
 import numpy as np
 
-from .colors import color
-
 eps = 1e-10
 
 import cv2
 
-def quantize(img):
+def quantize(img,color):
     cv2.imwrite("test.png",img)
     # quantize image to palette
     if not isinstance(img, np.ndarray):
@@ -32,7 +30,8 @@ def quantize(img):
 
 
 from scipy.ndimage.measurements import label
-def quantized_to_bitmasks(img, palette):
+def quantized_to_bitmasks(img, color):
+    palette = color.palette()
     # get "components" of each color
     filtered_components = []
     filtered_cls_ids = []

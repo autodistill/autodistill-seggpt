@@ -89,7 +89,7 @@ res, hres = 448, 448
 
 # SegGPT-specific utils
 from . import colors
-from .colors import color
+from .colors import Color
 from .few_shot_ontology import FewShotOntology,SeparatedFewShotOntology
 from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitmasks
 from .sam_refine import load_SAM, refine_detections
@@ -226,14 +226,14 @@ class SegGPT(DetectionBaseModel):
             combined_detections = []
             for cls_id in self.ontology.prompts():
                 sub_dataset = self.ontology.ref_datasets[cls_id]
-                cls_dets = self.predict_simple(input,sub_dataset)
+                cls_dets = self.predict_simple(input,sub_dataset,color=colors.instance)
                 if len(cls_dets) > 0:
                     cls_dets.class_id = np.ones_like(cls_dets.class_id) * cls_id
                 combined_detections.append(cls_dets)
             
             detections = sv.Detections.merge(combined_detections)
         else:
-            detections = self.predict_simple(input, self.ontology.ref_dataset)
+            detections = self.predict_simple(input, self.ontology.ref_dataset,color=colors.semantic)
         
         # now map the real, original class_ids to the class_ids in the ontology
         detections = extract_classes_from_dataset(detections, self.ontology.prompts())
@@ -244,6 +244,7 @@ class SegGPT(DetectionBaseModel):
         self,
         input: Union[str, np.ndarray],
         ref_dataset: DetectionDataset,
+        color: Color
     ) -> sv.Detections:
         if type(input) == str:
             image = Image.open(input).convert("RGB")
@@ -282,12 +283,9 @@ class SegGPT(DetectionBaseModel):
         # We constrain all masks to follow a given color palette.
         # This can help distinguish adjacent instances.
         # But it also serves as a bitmask-ifier when we just set the palette to be white.
-        quant_output = quantize(output)
+        quant_output = quantize(output,color)
 
-        to_bitmask_output = quant_output
-        to_bitmask_palette = color.palette()
-
-        bitmasks,cls_ids = quantized_to_bitmasks(to_bitmask_output, to_bitmask_palette)
+        bitmasks,cls_ids = quantized_to_bitmasks(quant_output, color)
         detections = bitmasks_to_detections(bitmasks, cls_ids)
 
         cv2.imwrite("raw_ann.png",self.annotator.annotate(scene=input_image, detections=detections))

@@ -98,7 +98,6 @@ class RandomColors(SemanticColoring):
 
 palette_registry["random"] = RandomColors
 
-# choose your preset
-preset = "rgb_semantic"
-
-color = palette_registry[preset]
+# I like these defaults
+semantic = RGBSemantic
+instance = White
