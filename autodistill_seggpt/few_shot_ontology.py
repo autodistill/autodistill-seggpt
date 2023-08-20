@@ -13,7 +13,7 @@ from supervision.dataset.core import DetectionDataset
 # move the searching/etc. logic into find_best_examples.
 # Maybe also try to make nice/quick serialization for shareability.
 
-def default_model(ontology: FewShotOntologySimple) -> DetectionBaseModel:
+def default_model(ontology: FewShotOntology) -> DetectionBaseModel:
     from .seggpt import SegGPT
 
     return SegGPT(
@@ -23,7 +23,7 @@ def default_model(ontology: FewShotOntologySimple) -> DetectionBaseModel:
 
 # the best set of images--this will be used to detect every class
 @dataclass
-class FewShotOntologySimple(DetectionOntology):
+class FewShotOntology(DetectionOntology):
     def __init__(
         self,
         ref_dataset: DetectionDataset,
@@ -50,6 +50,21 @@ class FewShotOntologySimple(DetectionOntology):
 
     def classToPrompt(self, cls: str) -> str:
         return self.reverse_mapping[cls]
+
+class SeparatedFewShotOntology(FewShotOntology): # inherit from FewShotOntology so we can use the same standard methods. No semantic meaning here.
+    def __init__(
+            self,
+            ref_datasets: Dict[int, DetectionDataset], # must have keys for all class_ids in mapping. But CAN have extra keys.
+            mapping: Dict[int, str] = None, # class_id -> new_class_name
+    ):
+        self.ref_datasets = ref_datasets
+
+        if mapping is None:
+            mapping = {i: f"{i}-{cls_name}" for i, cls_name in enumerate(ref_datasets[0].classes)}
+        self.mapping = mapping
+
+        self.reverse_mapping = {v: k for k, v in mapping.items()}
+        assert len(self.reverse_mapping) == len(self.mapping), "Mapping must be 1-to-1."
 
 # the best set of images to use to detect each individual class
 @dataclass

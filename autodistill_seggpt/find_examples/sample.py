@@ -9,12 +9,13 @@ from autodistill.detection import DetectionBaseModel
 from supervision.dataset.core import DetectionDataset
 from tqdm import tqdm
 
+from .common import separable
 from ..dataset_utils import (
     label_dataset,
     shrink_dataset_to_size,
     viz_dataset,
 )
-from ..few_shot_ontology import FewShotOntologySimple
+from ..few_shot_ontology import FewShotOntology
 from ..metrics import Metric, metrics_registry
 import os
 
@@ -23,17 +24,20 @@ import os
 # Metrics could include: mask AP, mask IoU, box AP, etc.
 from random import choice
 import json
+
+
+@separable
 def sample_ontology(
     # general params
     ref_dataset: DetectionDataset,
-    make_model: Callable[[FewShotOntologySimple], DetectionBaseModel],
+    make_model: Callable[[FewShotOntology], DetectionBaseModel],
     metric: Metric,
 
     # sample-specific params
     num_examples: int = 4,
     num_trials: int = 1,
     max_test_imgs: int = 10,
-)->FewShotOntologySimple:
+)->FewShotOntology:
     print("num_examples",num_examples)
 
     positive_examples = [
@@ -73,7 +77,7 @@ def sample_ontology(
 
         os.makedirs(f"samples/{combo_hash}",exist_ok=True)
         viz_dataset(f"samples/{combo_hash}/train.png",sub_dataset)
-        ontology = FewShotOntologySimple(sub_dataset)
+        ontology = FewShotOntology(sub_dataset)
         model = make_model(ontology)  # model must take only an Ontology as a parameter
         pred_dataset = label_dataset(valid_dataset, model)
         viz_dataset(f"samples/{combo_hash}/infer.png",pred_dataset)

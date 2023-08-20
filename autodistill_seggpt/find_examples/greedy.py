@@ -8,29 +8,33 @@ from autodistill.detection import DetectionBaseModel
 from supervision.dataset.core import DetectionDataset
 from tqdm import tqdm
 
+from .common import separable
 from ..dataset_utils import (
     extract_images_from_dataset,
     extract_images_from_dataset,
     shrink_dataset_to_size,
     viz_dataset,
 )
-from ..few_shot_ontology import FewShotOntologySimple
+from ..few_shot_ontology import FewShotOntology
 from ..metrics import Metric, MetricDirection
 
 from random import choice
 import json
 import os
+
+
+@separable
 def grow_ontology(
     # general params
     ref_dataset: DetectionDataset,
-    make_model: Callable[[FewShotOntologySimple], DetectionBaseModel],
+    make_model: Callable[[FewShotOntology], DetectionBaseModel],
     metric: Metric,
 
     # sample-specific params
     num_examples: int = 4,
     num_trials: int = 2,
     max_test_imgs: int = 3,
-)->FewShotOntologySimple:
+)->FewShotOntology:
 
     positive_examples = [img_name for img_name in ref_dataset.images if len(ref_dataset.annotations[img_name]) > 0]
 
@@ -49,7 +53,7 @@ def grow_ontology(
         for i in range(num_examples):
 
             curr_dataset = extract_images_from_dataset(ref_dataset, curr_images)
-            curr_ontology = FewShotOntologySimple(curr_dataset)
+            curr_ontology = FewShotOntology(curr_dataset)
 
             # viz_dataset(f"greedies/{j}/train.png",curr_dataset)
 
@@ -103,7 +107,7 @@ def grow_ontology(
             curr_images.append(worst_img)
         
         ontologies_scores.append((
-            FewShotOntologySimple(extract_images_from_dataset(ref_dataset, curr_images)),
+            FewShotOntology(extract_images_from_dataset(ref_dataset, curr_images)),
             avg_score
         ))
     

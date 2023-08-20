@@ -90,9 +90,10 @@ res, hres = 448, 448
 # SegGPT-specific utils
 from . import colors
 from .colors import color
-from .few_shot_ontology import FewShotOntologySimple
+from .few_shot_ontology import FewShotOntology,SeparatedFewShotOntology
 from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitmasks
 from .sam_refine import load_SAM, refine_detections
+from .dataset_utils import extract_classes_from_dataset
 
 use_colorings = colors.preset != "white"
 
@@ -103,7 +104,7 @@ class SegGPT(DetectionBaseModel):
 
     def __init__(
         self,
-        ontology: FewShotOntologySimple,
+        ontology: FewShotOntology,
         refine_detections: bool = True,
         sam_predictor=None,
     ):
@@ -124,6 +125,8 @@ class SegGPT(DetectionBaseModel):
         self.ref_imgs = {}
 
         self.annotator = sv.MaskAnnotator()
+
+        torch.use_deterministic_algorithms(False)
 
     @staticmethod
     def preprocess(img: np.ndarray) -> np.ndarray:
@@ -216,14 +219,33 @@ class SegGPT(DetectionBaseModel):
         masks = np.stack(masks, axis=0)
         ret = (imgs, masks, min_area_per_class)
         return ret
-
+    
     @torch.no_grad()
-    def predict(
-        self, input: Union[str, np.ndarray], _confidence: int = 0.5
+    def predict(self, input: Union[str, np.ndarray], _confidence: int = 0.5):
+        if isinstance(self.ontology,SeparatedFewShotOntology):
+            combined_detections = []
+            for cls_id in self.ontology.prompts():
+                sub_dataset = self.ontology.ref_datasets[cls_id]
+                cls_dets = self.predict_simple(input,sub_dataset)
+                if len(cls_dets) > 0:
+                    cls_dets.class_id = np.ones_like(cls_dets.class_id) * cls_id
+                combined_detections.append(cls_dets)
+            
+            detections = sv.Detections.merge(combined_detections)
+        else:
+            detections = self.predict_simple(input, self.ontology.ref_dataset)
+        
+        # now map the real, original class_ids to the class_ids in the ontology
+        detections = extract_classes_from_dataset(detections, self.ontology.prompts())
+
+        return detections
+    
+    def predict_simple(
+        self,
+        input: Union[str, np.ndarray],
+        ref_dataset: DetectionDataset,
     ) -> sv.Detections:
         if type(input) == str:
-            if input in self.ontology.ref_dataset.images:
-                image = Image.fromarray(self.ref_dataset.images[input])
             image = Image.open(input).convert("RGB")
         else:
             image = Image.fromarray(input)
@@ -233,7 +255,7 @@ class SegGPT(DetectionBaseModel):
 
         img = self.preprocess(input_image)
 
-        ref_imgs, ref_masks, min_ref_area_per_class = self.prepare_ref_imgs(self.ontology.ref_dataset)
+        ref_imgs, ref_masks, min_ref_area_per_class = self.prepare_ref_imgs(ref_dataset)
 
         detections = []
         assert len(img.shape) == 3, f"img.shape: {img.shape}"
@@ -273,7 +295,7 @@ class SegGPT(DetectionBaseModel):
         filter_rel = False
         if filter_rel:
             filtered_detections = []
-            for cls_id in range(len(self.ontology.ref_dataset.classes)):
+            for cls_id in range(len(ref_dataset.classes)):
                 cls_detections = detections[detections.class_id == cls_id]
                 cls_min_area = min_ref_area_per_class[cls_id]
                 cls_filtered_detections = cls_detections[cls_detections.area > cls_min_area * 0.75]
