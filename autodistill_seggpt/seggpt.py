@@ -7,6 +7,12 @@ import os
 import subprocess
 import sys
 
+def replace_in_file(path, old, new):
+    with open(path, "r") as f:
+        contents = f.read()
+    contents = contents.replace(old, new)
+    with open(path, "w") as f:
+        f.write(contents)
 
 def check_dependencies():
 
@@ -42,13 +48,8 @@ def check_dependencies():
         print("Installing SegGPT...")
         subprocess.run(["git", "clone", "https://github.com/baaivision/Painter.git"])
 
-        # replace "detectron2.layers" in Painter/SegGPT/SegGPT_inference/models_seggpt.py with "detectron2_layers"
-        models_seggpt_path = os.path.join(seggpt_path, "models_seggpt.py")
-        with open(models_seggpt_path, "r") as f:
-            contents = f.read()
-        contents = contents.replace("detectron2.layers", "detectron2_layers")
-        with open(models_seggpt_path, "w") as f:
-            f.write(contents)
+        replace_in_file(os.path.join(seggpt_path, "models_seggpt.py"), "detectron2.layers", "detectron2_layers")
+        replace_in_file(os.path.join(seggpt_path, "seggpt_engine.py"), "@torch.no_grad()", "")
 
         os.makedirs(models_dir, exist_ok=True)
 
@@ -102,7 +103,7 @@ class SegGPT(DetectionBaseModel):
 
     def __init__(
         self,
-        ontology: FewShotOntology,
+        ontology: Union[FewShotOntology,DetectionDataset],
         refine_detections: bool = True,
         sam_predictor=None,
     ):
@@ -110,10 +111,13 @@ class SegGPT(DetectionBaseModel):
         Initialize a SegGPT base model.
 
         Keyword arguments:
-        ontology -- the FewShotOntology to use for this model.
+        ontology -- the FewShotOntology or DetectionDataset to use for this model.
         refine_detections -- whether to refine SegGPT's mask predictions with SAM. This makes inference slower, but usually more accurate.
         sam_predictor -- a SamPredictor object to use for refining detections. If None, a default SamPredictor will be created.
         """
+
+        if isinstance(ontology,DetectionDataset):
+            ontology = FewShotOntology(ontology)
 
         self.ontology = ontology
         self.refine_detections = refine_detections
@@ -217,15 +221,18 @@ class SegGPT(DetectionBaseModel):
         ret = (imgs, masks, min_area_per_class)
         return ret
     
+    def is_separated(self)->bool:
+        return isinstance(self.ontology,SeparatedFewShotOntology)
+    
     def get_coloring(self)->Coloring:
-        if isinstance(self.ontology,SeparatedFewShotOntology):
+        if self.is_separated():
             return colors.instance
         else:
             return colors.semantic
     
     @torch.no_grad()
     def predict(self, input: Union[str, np.ndarray], _confidence: int = 0.5):
-        if isinstance(self.ontology,SeparatedFewShotOntology):
+        if self.is_separated():
             combined_detections = []
             for cls_id in self.ontology.prompts():
                 sub_dataset = self.ontology.ref_datasets[cls_id]
@@ -252,6 +259,9 @@ class SegGPT(DetectionBaseModel):
         if type(input) == str:
             image = Image.open(input).convert("RGB")
         else:
+            # convert bgr to rgb
+            input = cv2.cvtColor(input, cv2.COLOR_BGR2RGB)
+
             image = Image.fromarray(input)
 
         size = image.size

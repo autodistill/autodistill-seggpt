@@ -135,3 +135,5 @@ samples/
 greedies/
 
 *.png
+*.pt
+*.pth
