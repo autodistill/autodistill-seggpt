@@ -194,3 +194,4 @@ def viz_dataset(filename:str,dataset:DetectionDataset):
     sv.utils.notebook.plot_images_grid(annotated_imgs,grid_size=grid_dims,size=size)
     plt.savefig(filename)
     # plt.close()
+

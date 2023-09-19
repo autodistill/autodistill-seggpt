@@ -29,10 +29,8 @@ setuptools.setup(
         "pycocotools",
         "timm",
         "fairscale",
-        "detectron2-layers"
-    ],
-    dependency_links=[
-        # "git+https://github.com/facebookresearch/detectron2.git"
+        "detectron2-layers",
+        "combinadics",
     ],
     packages=find_packages(exclude=("tests",)),
     extras_require={

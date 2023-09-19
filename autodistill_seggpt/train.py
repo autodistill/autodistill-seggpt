@@ -39,6 +39,20 @@ class SegGPTTorchDataset(Dataset):
 
         return img,gt_mask
 
+import os
+import cv2
+from .colors import Coloring
+from .seggpt import SegGPT
+import torch
+
+def save_dataset(dirname:str,ds: SegGPTTorchDataset):
+    os.makedirs(dirname,exist_ok=True)
+
+    for i,(img,gt_mask) in enumerate(ds):
+        # save as pt
+        torch.save(img,os.path.join(dirname,f"{i}.img.pt"))
+        torch.save(gt_mask,os.path.join(dirname,f"{i}.mask.pt"))
+
 # model
 from .seggpt import \
     ckpt_path, model, device, \
@@ -107,8 +121,8 @@ class SegGPTTorchModel(nn.Module):
         # this doesn't matter since we're only using one example image at a time - and one batch has only one example. :(
         feat_ensemble = 0 if len(x) > 1 else -1
 
-        torch.save(x, 'x.pt')
-        torch.save(tgt, 'tgt.pt')
+        # torch.save(x, 'x.pt')
+        # torch.save(tgt, 'tgt.pt')
 
         _, y, mask = model(x,tgt, bool_masked_pos.to(device), valid.float().to(device), seg_type.to(device), feat_ensemble)
         y = model.unpatchify(y)
@@ -117,7 +131,7 @@ class SegGPTTorchModel(nn.Module):
         output = y[0, y.shape[1]//2:, :, :]
 
         output = self.postprocess(output)
-        torch.save(output, 'output.pt')
+        # torch.save(output, 'output.pt')
 
         return output
 
@@ -156,5 +170,3 @@ class SegGPTTorchModel(nn.Module):
 
         optimizer = torch.optim.Adam(parameters,lr=lr)
         return optimizer
-    
-# training loop
