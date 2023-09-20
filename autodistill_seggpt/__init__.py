@@ -1,4 +1,4 @@
-__version__ = "0.1.3"
+__version__ = "0.1.6"
 
 from .dataset_utils import label_dataset, shrink_dataset_to_size,viz_dataset
 from .few_shot_ontology import FewShotOntology

@@ -182,7 +182,9 @@ def viz_dataset(dataset:DetectionDataset,filename:str=None):
 
     img_names = list(dataset.images.keys())
 
-    grid_len = math.ceil(math.sqrt(len(img_names)))
+    num_imgs_to_show = min(16,len(img_names))
+
+    grid_len = math.ceil(math.sqrt(num_imgs_to_show))
 
     grid_dims=(grid_len,grid_len)
 
