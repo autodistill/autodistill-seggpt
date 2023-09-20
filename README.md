@@ -44,14 +44,14 @@ base_model = SegGPT(
     ontology=FewShotOntology(supervision_dataset)
 )
 
-base_model.label("./unlabelled-climbing-photos", extension=".jpg")
+base_model.label("./unlabelled-photos", extension=".jpg")
 ```
 
 ## How to load data from Roboflow
 
 Labelling and importing images is easy!
 
-You can use [Roboflow Annotate](https://roboflow.com/annotate) to label a few images (5-10 should work fine). For your Project Type, make sure to pick Instance Segmentation, as you will be labelling with polygons.
+You can use [Roboflow Annotate](https://roboflow.com/annotate) to label a few images (1-3 should work fine). For your Project Type, make sure to pick Instance Segmentation, as you will be labelling with polygons.
 
 Once you have labelled your images, you can press Generate > Generate New Version. You can use all the default options--no Augmentations are necessary.
 

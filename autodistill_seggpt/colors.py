@@ -5,30 +5,99 @@ import numpy as np
 
 palette_registry = {}
 
+class Coloring:
+    @classmethod
+    def type():
+        raise NotImplementedError
+    @classmethod
+    def next_color(cls,class_id:int):
+        raise NotImplementedError
+    @classmethod
+    def palette(cls):
+        raise NotImplementedError
 
-# use white
-def next_white():
-    return np.asarray([255, 255, 255])
+# color based on class ID
+class SemanticColoring(Coloring):
+    @classmethod
+    def type(cls):
+        return "semantic"
+    @classmethod
+    def next_color(cls,class_id:int):
+        raise NotImplementedError
+    @classmethod
+    def palette(cls):
+        raise NotImplementedError
 
+class InstanceColoring(Coloring):
+    @classmethod
+    def type(cls):
+        return "instance"
+    @classmethod
+    def next_color(cls,class_id:int):
+        return cls._next_color()
+    @classmethod
+    def _next_color(cls):
+        raise NotImplementedError
+    @classmethod
+    def palette(cls):
+        raise NotImplementedError
 
-white_palette = next_white()[None, ...]
+class PaletteSemanticColoring(SemanticColoring):
+    class_palette = None
+    @classmethod
+    def next_color(cls,class_id:int):
+        return cls.class_palette[class_id % len(cls.class_palette)]
+    @classmethod
+    def palette(cls):
+        return cls.class_palette
 
-palette_registry["white"] = (white_palette, next_white, "semantic")
+class PaletteInstanceColoring(InstanceColoring):
+    instance_palette = None
+    curr_idx = 0
+    @classmethod
+    def _next_color(cls):
+        ret = cls.instance_palette[cls.curr_idx % len(cls.instance_palette)]
+        cls.curr_idx = (cls.curr_idx + 1) % len(cls.instance_palette)
+        return np.asarray(list(ret))
+    @classmethod
+    def palette(cls):
+        return cls.instance_palette
 
-# use r/g/b
-rgb_palette = np.asarray([[255, 0, 0], [0, 255, 0], [0, 0, 255]])
+class White(PaletteSemanticColoring):
+    class_palette = np.asarray([[255, 255, 255]])
 
+palette_registry["white"] = White
 
-def next_rgb():
-    global curr_idx
-    ret = rgb_palette[curr_idx]
-    curr_idx = (curr_idx + 1) % len(rgb_palette)
-    return np.asarray(list(ret))
+class RGB(PaletteInstanceColoring):
+    # use r/g/b
+    instance_palette = np.asarray([[255, 0, 0], [0, 255, 0], [0, 0, 255]])
 
+palette_registry["rgb"] = RGB
 
-palette_registry["rgb"] = (rgb_palette, next_rgb, "instance")
+class RGBSemantic(PaletteSemanticColoring):
+    # use r/g/b
+    class_palette = np.asarray([[255, 0, 0], [0, 255, 0], [0, 0, 255]])
 
-# choose your preset
-preset = "white"
+palette_registry["rgb_semantic"] = RGBSemantic
 
-palette, next_color, seg_type = palette_registry[preset]
+class RandomColors(SemanticColoring):
+    class_colors = []
+    class_palette = np.ndarray((0,3),dtype=np.uint8)
+    @classmethod
+    def next_color(cls,class_id:int):
+        if class_id >= len(cls.class_colors):
+            # fill in the palette
+            for i in range(len(cls.class_colors),class_id+1):
+                cls.class_colors.append(np.array([floor(random()*255),floor(random()*255),floor(random()*255)]))
+            # construct new class palette
+            cls.class_palette = np.stack(cls.class_colors,axis=0)
+        return cls.class_colors[class_id]
+    @classmethod
+    def palette(cls):
+        return cls.class_palette
+
+palette_registry["random"] = RandomColors
+
+# I like these defaults
+semantic = RGBSemantic
+instance = White

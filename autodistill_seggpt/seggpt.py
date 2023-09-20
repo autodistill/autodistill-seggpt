@@ -7,27 +7,35 @@ import os
 import subprocess
 import sys
 
+def replace_in_file(path, old, new):
+    with open(path, "r") as f:
+        contents = f.read()
+    contents = contents.replace(old, new)
+    with open(path, "w") as f:
+        f.write(contents)
 
 def check_dependencies():
+
     # Create the ~/.cache/autodistill directory if it doesn't exist
     autodistill_dir = os.path.expanduser("~/.cache/autodistill")
     os.makedirs(autodistill_dir, exist_ok=True)
 
+    og_dir = os.getcwd()
     os.chdir(autodistill_dir)
 
-    try:
-        import detectron2
-    except ImportError:
-        print("Installing detectron2...")
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "git+https://github.com/facebookresearch/detectron2.git",
-            ]
-        )
+    # try:
+    #     import detectron2
+    # except ImportError:
+    #     print("Installing detectron2...")
+    #     subprocess.run(
+    #         [
+    #             sys.executable,
+    #             "-m",
+    #             "pip",
+    #             "install",
+    #             "git+https://github.com/facebookresearch/detectron2.git",
+    #         ]
+    #     )
 
     # Check if SegGPT is installed
     seggpt_path = os.path.join(autodistill_dir, "Painter", "SegGPT", "SegGPT_inference")
@@ -40,10 +48,15 @@ def check_dependencies():
         print("Installing SegGPT...")
         subprocess.run(["git", "clone", "https://github.com/baaivision/Painter.git"])
 
+        replace_in_file(os.path.join(seggpt_path, "models_seggpt.py"), "detectron2.layers", "detectron2_layers")
+        replace_in_file(os.path.join(seggpt_path, "seggpt_engine.py"), "@torch.no_grad()", "")
+
         os.makedirs(models_dir, exist_ok=True)
 
         print("Downloading SegGPT weights...")
         subprocess.run(["wget", model_url, "-O", ckpt_path])
+    
+    os.chdir(og_dir)
 
 
 check_dependencies()
@@ -63,7 +76,7 @@ from PIL import Image
 from seggpt_engine import run_one_image
 from seggpt_inference import prepare_model
 from segment_anything import SamPredictor
-from supervision import Detections
+from supervision import Detections,DetectionDataset
 from torch.nn import functional as F
 
 # Model/dataset parameters - don't need to be configurable
@@ -77,12 +90,11 @@ res, hres = 448, 448
 
 # SegGPT-specific utils
 from . import colors
-from .few_shot_ontology import FewShotOntology
+from .colors import Coloring
+from .few_shot_ontology import FewShotOntology,SeparatedFewShotOntology
 from .postprocessing import bitmasks_to_detections, quantize, quantized_to_bitmasks
 from .sam_refine import load_SAM, refine_detections
-
-use_colorings = colors.preset != "white"
-
+from .dataset_utils import extract_classes_from_detections
 
 @dataclass
 class SegGPT(DetectionBaseModel):
@@ -91,7 +103,7 @@ class SegGPT(DetectionBaseModel):
 
     def __init__(
         self,
-        ontology: FewShotOntology,
+        ontology: Union[FewShotOntology,DetectionDataset],
         refine_detections: bool = True,
         sam_predictor=None,
     ):
@@ -99,10 +111,13 @@ class SegGPT(DetectionBaseModel):
         Initialize a SegGPT base model.
 
         Keyword arguments:
-        ontology -- the FewShotOntology to use for this model.
+        ontology -- the FewShotOntology or DetectionDataset to use for this model.
         refine_detections -- whether to refine SegGPT's mask predictions with SAM. This makes inference slower, but usually more accurate.
         sam_predictor -- a SamPredictor object to use for refining detections. If None, a default SamPredictor will be created.
         """
+
+        if isinstance(ontology,DetectionDataset):
+            ontology = FewShotOntology(ontology)
 
         self.ontology = ontology
         self.refine_detections = refine_detections
@@ -110,6 +125,10 @@ class SegGPT(DetectionBaseModel):
         self.load_models(sam_predictor)
 
         self.ref_imgs = {}
+
+        self.annotator = sv.MaskAnnotator()
+
+        torch.use_deterministic_algorithms(False)
 
     @staticmethod
     def preprocess(img: np.ndarray) -> np.ndarray:
@@ -121,8 +140,7 @@ class SegGPT(DetectionBaseModel):
 
     # convert an img + detections into an img + mask.
     # note: all the detections have the same class in the FewShotOntology.
-    @staticmethod
-    def prepare_ref_img(img: np.ndarray, detections: Detections):
+    def prepare_ref_img(img: np.ndarray, detections: Detections,coloring:Coloring):
         ih, iw, _ = img.shape
         og_img = img
 
@@ -132,8 +150,9 @@ class SegGPT(DetectionBaseModel):
         # draw masks onto image
         mask = np.zeros_like(og_img)
         for detection in detections:
-            curr_rgb = colors.next_color()
-            det_box, det_mask, *_ = detection
+            _, det_mask, _, det_class_id, *_ = detection
+
+            curr_rgb = coloring.next_color(det_class_id.item())
 
             mh, mw = det_mask.shape
 
@@ -150,23 +169,25 @@ class SegGPT(DetectionBaseModel):
             assert det_mask.max() <= 1, "mask values should be in [0,1]"
 
             mask[det_mask] = curr_rgb
+        
+        cv2.imwrite("mask.png",mask)
 
         mask = SegGPT.preprocess(mask)
 
         return img, mask
 
     # Convert a list of reference images into a SegGPT-friendly batch.
-    @staticmethod
-    def _prepare_ref_imgs(
-        refs: List[Tuple[np.ndarray, Detections]]
+    def old_prepare_ref_imgs(
+        self, cls_name: str, refs: List[Tuple[np.ndarray, Detections]]
     ):
         imgs, masks = [], []
         min_area = inf
         for ref_img, detections in refs:
             img, mask = SegGPT.prepare_ref_img(ref_img, detections)
 
-            img_min_area = detections.area.min() if len(detections) > 0 else inf
-            min_area = min(min_area, img_min_area)
+            if len(detections.area) > 0:
+              img_min_area = detections.area.min()
+              min_area = min(min_area, img_min_area)
 
             imgs.append(img)
             masks.append(mask)
@@ -185,16 +206,68 @@ class SegGPT(DetectionBaseModel):
         self.ref_imgs[cls_name] = ret
 
         return ret
+    
+    def prepare_ref_imgs(self,ref_dataset: DetectionDataset)->Tuple[np.ndarray,np.ndarray,float]:
+        imgs, masks = [], []
+        min_area_per_class = [inf for _ in ref_dataset.classes]
+        for img_name, detections in ref_dataset.annotations.items():
+            img = ref_dataset.images[img_name]
+            img, mask = SegGPT.prepare_ref_img(img, detections, coloring=self.get_coloring())
 
+            for cls_id in range(len(ref_dataset.classes)):
+                cls_detections = detections[detections.class_id == cls_id]
+                if len(cls_detections.area) > 0:
+                    img_min_area = cls_detections.area.min()
+                    min_area_per_class[cls_id] = min(min_area_per_class[cls_id], img_min_area)
+
+            imgs.append(img)
+            masks.append(mask)
+        imgs = np.stack(imgs, axis=0)
+        masks = np.stack(masks, axis=0)
+        ret = (imgs, masks, min_area_per_class)
+        return ret
+    
+    def is_separated(self)->bool:
+        return isinstance(self.ontology,SeparatedFewShotOntology)
+    
+    def get_coloring(self)->Coloring:
+        if self.is_separated():
+            return colors.instance
+        else:
+            return colors.semantic
+    
     @torch.no_grad()
-    def predict(
-        self, input: Union[str, np.ndarray], _confidence: int = 0.5
+    def predict(self, input: Union[str, np.ndarray], _confidence: int = 0.5):
+        if self.is_separated():
+            combined_detections = []
+            for cls_id in self.ontology.prompts():
+                sub_dataset = self.ontology.ref_datasets[cls_id]
+                cls_dets = self.predict_simple(input,sub_dataset)
+                if len(cls_dets) > 0:
+                    cls_dets.class_id = np.ones_like(cls_dets.class_id) * cls_id
+                combined_detections.append(cls_dets)
+            
+            detections = sv.Detections.merge(combined_detections)
+        else:
+            detections = self.predict_simple(input, self.ontology.ref_dataset)
+        
+        # now map the real, original class_ids to the class_ids in the ontology
+        detections = extract_classes_from_detections(detections, self.ontology.prompts())
+        return detections
+    
+    def predict_simple(
+        self,
+        input: Union[str, np.ndarray],
+        ref_dataset: DetectionDataset,
     ) -> sv.Detections:
+        coloring = self.get_coloring()
+
         if type(input) == str:
-            if input in self.ontology.ref_dataset.images:
-                image = Image.fromarray(self.ref_dataset.images[input])
             image = Image.open(input).convert("RGB")
         else:
+            # convert bgr to rgb
+            input = cv2.cvtColor(input, cv2.COLOR_BGR2RGB)
+
             image = Image.fromarray(input)
 
         size = image.size
@@ -202,58 +275,66 @@ class SegGPT(DetectionBaseModel):
 
         img = self.preprocess(input_image)
 
+        ref_imgs, ref_masks, min_ref_area_per_class = self.prepare_ref_imgs(ref_dataset)
+
         detections = []
-        for keyId, raw_ref_imgs in enumerate(self.ontology.rich_prompts()):
-            assert len(img.shape) == 3, f"img.shape: {img.shape}"
+        assert len(img.shape) == 3, f"img.shape: {img.shape}"
 
-            ref_imgs, ref_masks, min_ref_area = self.prepare_ref_imgs(
-                keyId, raw_ref_imgs
+        # convert ref_imgs from (N,H,W,C) to (N,2H,W,C)
+        img_repeated = np.repeat(img[np.newaxis, ...], len(ref_imgs), axis=0)
+
+        # SegGPT uses this weird format--it needs images/masks to be in format (N,2H,W,C)--where the first H rows are the reference image, and the next H rows are the input image.
+        imgs = np.concatenate((ref_imgs, img_repeated), axis=1)
+        masks = np.concatenate((ref_masks, ref_masks), axis=1)
+
+        torch.manual_seed(2)
+        output = run_one_image(imgs, masks, self.model, device)
+        output = (
+            F.interpolate(
+                output[None, ...].permute(0, 3, 1, 2),
+                size=[size[1], size[0]],
+                mode="nearest",
             )
+            .permute(0, 2, 3, 1)[0]
+            .numpy()
+        )
 
-            # convert ref_imgs from (N,H,W,C) to (N,2H,W,C)
-            img_repeated = np.repeat(img[np.newaxis, ...], len(ref_imgs), axis=0)
+        # We constrain all masks to follow a given color palette.
+        # This can help distinguish adjacent instances.
+        # But it also serves as a bitmask-ifier when we just set the palette to be white.
+        quant_output = quantize(output,coloring)
 
-            # SegGPT uses this weird format--it needs images/masks to be in format (N,2H,W,C)--where the first H rows are the reference image, and the next H rows are the input image.
-            imgs = np.concatenate((ref_imgs, img_repeated), axis=1)
-            masks = np.concatenate((ref_masks, ref_masks), axis=1)
+        bitmasks,cls_ids = quantized_to_bitmasks(quant_output, coloring)
+        detections = bitmasks_to_detections(bitmasks, cls_ids)
 
-            torch.manual_seed(2)
-            output = run_one_image(imgs, masks, self.model, device)
-            output = (
-                F.interpolate(
-                    output[None, ...].permute(0, 3, 1, 2),
-                    size=[size[1], size[0]],
-                    mode="nearest",
-                )
-                .permute(0, 2, 3, 1)[0]
-                .numpy()
-            )
+        cv2.imwrite("raw_ann.png",self.annotator.annotate(scene=input_image, detections=detections))
 
-            # We constrain all masks to follow a given color palette.
-            # This can help distinguish adjacent instances.
-            # But it also serves as a bitmask-ifier when we just set the palette to be white.
-            quant_output = quantize(output)
+        filter_rel = False
+        if filter_rel:
+            filtered_detections = []
+            for cls_id in range(len(ref_dataset.classes)):
+                cls_detections = detections[detections.class_id == cls_id]
+                cls_min_area = min_ref_area_per_class[cls_id]
+                cls_filtered_detections = cls_detections[cls_detections.area > cls_min_area * 0.75]
+                filtered_detections.append(cls_filtered_detections)
 
-            to_bitmask_output = quant_output
-            to_bitmask_palette = colors.palette
-
-            bitmasks = quantized_to_bitmasks(to_bitmask_output, to_bitmask_palette)
-            new_detections = bitmasks_to_detections(bitmasks, keyId)
-
-            new_detections = new_detections[new_detections.area > min_ref_area * 0.75]
-
-            if len(new_detections) > 0:
-                detections.append(new_detections)
-
-        # filter <100px detections
-        detections = Detections.merge(detections)
-
+            detections = Detections.merge(filtered_detections)
+        
+        # filter detections with no valid polygons
         if len(detections) > 0:
             detections = detections[has_polygons(detections.mask)]
             if self.refine_detections:
                 detections = refine_detections(
                     input_image, detections, self.sam_predictor
                 )
+        
+        cv2.imwrite("refined_ann.png",self.annotator.annotate(scene=input_image, detections=detections))
+        
+        if len(detections) > 0:
+            detections = detections[detections.area > 100]
+
+        cv2.imwrite("filtered_ann.png",self.annotator.annotate(scene=input_image, detections=detections))
+        
 
         return detections
 
@@ -261,7 +342,8 @@ class SegGPT(DetectionBaseModel):
     # We share these models globally across all SegGPT instances, since we end up making lots of SegGPT instances during find_best_examples.
     def load_models(self, sam_predictor):
         if SegGPT.model is None:
-            SegGPT.model = prepare_model(ckpt_path, model, colors.seg_type).to(device)
+            seg_type = self.get_coloring().type()
+            SegGPT.model = prepare_model(ckpt_path, model, seg_type).to(device)
         self.model = SegGPT.model
 
         # We load the SAM predictor iff it's a) needed and b) not already loaded.
@@ -274,8 +356,6 @@ class SegGPT(DetectionBaseModel):
 
 
 from supervision.dataset.utils import approximate_mask_with_polygons
-
-
 def has_polygons(masks: np.ndarray) -> np.ndarray:
     n, h, w = masks.shape
 
