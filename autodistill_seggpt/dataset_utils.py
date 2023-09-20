@@ -176,12 +176,18 @@ def extract_images_from_dataset(dataset: DetectionDataset, images: List[str])->D
         annotations={img_name:dataset.annotations[img_name] for img_name in images},
     )
 
+import math
 import matplotlib.pyplot as plt
-def viz_dataset(filename:str,dataset:DetectionDataset):
-    grid_dims=(4,4)
-    size=(16,16)
+def viz_dataset(dataset:DetectionDataset,filename:str=None):
 
     img_names = list(dataset.images.keys())
+
+    grid_len = math.ceil(math.sqrt(len(img_names)))
+
+    grid_dims=(grid_len,grid_len)
+
+    scale = 4
+    size=(grid_len*scale,grid_len*scale)
 
     sampled_img_names = sample(img_names, min(len(img_names),grid_dims[0]*grid_dims[1]))
 
@@ -192,6 +198,8 @@ def viz_dataset(filename:str,dataset:DetectionDataset):
 
     # plt.gcf().set_visible(False)
     sv.utils.notebook.plot_images_grid(annotated_imgs,grid_size=grid_dims,size=size)
-    plt.savefig(filename)
+
+    if filename is not None:
+        plt.savefig(filename)
     # plt.close()
 
