@@ -52,12 +52,13 @@ def default_model(ontology: FewShotOntology) -> DetectionBaseModel:
 
 def find_best_examples(
     ref_dataset: DetectionDataset,
-    make_model: Callable[[FewShotOntology], DetectionBaseModel]=default_model,
-    num_examples: int = 1,
-    num_trials: int = 10,
+    model_class: Callable[[FewShotOntology], DetectionBaseModel],
+    num_examples: int = 4,
+    num_trials: int = 1,
     max_test_imgs: int = 10,
     which_metric: Union[str, Metric] = "iou",
 ):
+    print("num_examples",num_examples)
     best_examples = {}
 
     if type(which_metric) == str:
